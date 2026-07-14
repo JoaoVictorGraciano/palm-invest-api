@@ -21,6 +21,7 @@ public class Transaction {
     private Integer quantity;
     private BigDecimal price;
     private LocalDateTime transactionDate;
+    private String observation; // Campo opcional de anotações
 
     // 🚀 NOVOS CAMPOS AQUI
     private String broker; // Corretora
@@ -54,4 +55,7 @@ public class Transaction {
 
     public BigDecimal getFee() { return fee; }
     public void setFee(BigDecimal fee) { this.fee = fee; }
+
+    public String getObservation() { return observation; }
+    public void setObservation(String observation) { this.observation = observation; }
 }
