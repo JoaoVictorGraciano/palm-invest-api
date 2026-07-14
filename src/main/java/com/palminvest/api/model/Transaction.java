@@ -22,10 +22,14 @@ public class Transaction {
     private BigDecimal price;
     private LocalDateTime transactionDate;
 
+    // 🚀 NOVOS CAMPOS AQUI
+    private String broker; // Corretora
+    private BigDecimal fee; // Taxas (Emolumentos, corretagem, etc)
+
     // Construtor vazio obrigatório
     public Transaction() {}
 
-    // Getters e Setters
+    // Getters e Setters padrão
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -43,4 +47,11 @@ public class Transaction {
 
     public LocalDateTime getTransactionDate() { return transactionDate; }
     public void setTransactionDate(LocalDateTime transactionDate) { this.transactionDate = transactionDate; }
+
+    // 🚀 GETTERS E SETTERS DOS NOVOS CAMPOS
+    public String getBroker() { return broker; }
+    public void setBroker(String broker) { this.broker = broker; }
+
+    public BigDecimal getFee() { return fee; }
+    public void setFee(BigDecimal fee) { this.fee = fee; }
 }
