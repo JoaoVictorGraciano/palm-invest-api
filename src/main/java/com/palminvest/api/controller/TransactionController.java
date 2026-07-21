@@ -39,4 +39,24 @@ public class TransactionController {
         }
         return ResponseEntity.notFound().build();
     }
+
+    // 🚀 ROTA PARA EDITAR A TRANSAÇÃO
+    @PutMapping("/{id}")
+    public ResponseEntity<Transaction> updateTransaction(@PathVariable Long id, @RequestBody Transaction updatedTransaction) {
+        return repository.findById(id)
+                .map(transaction -> {
+                    transaction.setType(updatedTransaction.getType());
+                    transaction.setAssetSymbol(updatedTransaction.getAssetSymbol());
+                    transaction.setQuantity(updatedTransaction.getQuantity());
+                    transaction.setPrice(updatedTransaction.getPrice());
+                    transaction.setTransactionDate(updatedTransaction.getTransactionDate());
+                    transaction.setBroker(updatedTransaction.getBroker());
+                    transaction.setFee(updatedTransaction.getFee());
+                    transaction.setObservation(updatedTransaction.getObservation());
+                    
+                    Transaction savedTransaction = repository.save(transaction);
+                    return ResponseEntity.ok(savedTransaction);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
 }
