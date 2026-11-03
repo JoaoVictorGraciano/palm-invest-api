@@ -1,5 +1,6 @@
 package com.palminvest.api.model;
 
+import com.palminvest.api.dto.DadosCadastroTransacaoDTO;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -31,6 +32,23 @@ public class Transaction {
 
     // Construtor vazio obrigatório
     public Transaction() {}
+
+    // Cria a transação a partir dos dados validados do Front (o id é gerado pelo banco)
+    public Transaction(DadosCadastroTransacaoDTO dados) {
+        atualizarInformacoes(dados);
+    }
+
+    // Usado no PUT: substitui os campos editáveis
+    public void atualizarInformacoes(DadosCadastroTransacaoDTO dados) {
+        this.type = dados.type();
+        this.assetSymbol = dados.assetSymbol();
+        this.quantity = dados.quantity();
+        this.price = dados.price();
+        this.transactionDate = dados.transactionDate();
+        this.broker = dados.broker();
+        this.fee = dados.fee();
+        this.observation = dados.observation();
+    }
 
     // Getters e Setters padrão
     public Long getId() { return id; }
