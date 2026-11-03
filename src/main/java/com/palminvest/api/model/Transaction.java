@@ -1,5 +1,6 @@
 package com.palminvest.api.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -18,7 +19,8 @@ public class Transaction {
 
     private String type;
     private String assetSymbol;
-    private Integer quantity;
+    @Column(precision = 19, scale = 8) // Aceita frações (cripto, fundos)
+    private BigDecimal quantity;
     private BigDecimal price;
     private LocalDateTime transactionDate;
     private String observation; // Campo opcional de anotações
@@ -40,8 +42,8 @@ public class Transaction {
     public String getAssetSymbol() { return assetSymbol; }
     public void setAssetSymbol(String assetSymbol) { this.assetSymbol = assetSymbol; }
 
-    public Integer getQuantity() { return quantity; }
-    public void setQuantity(Integer quantity) { this.quantity = quantity; }
+    public BigDecimal getQuantity() { return quantity; }
+    public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
 
     public BigDecimal getPrice() { return price; }
     public void setPrice(BigDecimal price) { this.price = price; }
