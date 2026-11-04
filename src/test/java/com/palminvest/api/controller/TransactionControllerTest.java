@@ -85,6 +85,39 @@ class TransactionControllerTest extends IntegracaoTestBase {
         assertEquals(0, transactionRepository.count());
     }
 
+    // --- price ---
+
+    @Test
+    void priceComOitoCasasEhSalvoSemPerda() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var price = new BigDecimal("0.00001234");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.put("price", price);
+
+        var resposta = postTransacao(tokenA, corpo)
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        var json = jsonMapper.readTree(resposta);
+
+        // Compara como BigDecimal (compareTo), sem passar por double
+        assertEquals(0, price.compareTo(json.get("price").decimalValue()));
+        var salva = transactionRepository.findById(json.get("id").asLong()).orElseThrow();
+        assertEquals(0, price.compareTo(salva.getPrice()));
+    }
+
+    @Test
+    void priceComNoveCasasRetorna400() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.put("price", new BigDecimal("0.000012345"));
+
+        postTransacao(tokenA, corpo)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$[*].campo", hasItem("price")));
+
+        assertEquals(0, transactionRepository.count());
+    }
+
     // --- Isolamento entre usuários ---
 
     @Test
