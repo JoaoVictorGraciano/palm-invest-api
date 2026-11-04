@@ -14,7 +14,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/transactions")
-@CrossOrigin(origins = "*") // Magia pura: impede aquele erro chato de CORS quando o React tentar acessar
 public class TransactionController {
 
     @Autowired
