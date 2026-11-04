@@ -28,6 +28,13 @@ public class Usuario implements UserDetails {
 
     private String senha;
 
+    // Usado no cadastro: a senha já deve chegar aqui criptografada (BCrypt)
+    public Usuario(String nome, String email, String senhaCriptografada) {
+        this.nome = nome;
+        this.email = email;
+        this.senha = senhaCriptografada;
+    }
+
     // --- MÉTODOS OBRIGATÓRIOS DO SPRING SECURITY (UserDetails) ---
 
     @Override

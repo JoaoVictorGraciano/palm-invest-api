@@ -2,33 +2,54 @@ package com.palminvest.api.security;
 
 import com.palminvest.api.model.Usuario;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 
 @Service
 public class TokenService {
 
-    // Essa chave deveria vir do application.properties, mas para facilitar agora, vamos gerar uma em memória.
-    private final Key key = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+    private static final String ISSUER = "API Palm Invest";
+
+    private final SecretKey key;
+    private final long expiracaoHoras;
+
+    // A chave vem da variável de ambiente JWT_SECRET (Base64), nunca do código
+    public TokenService(@Value("${api.security.token.secret}") String secret,
+                        @Value("${api.security.token.expiracao-horas}") long expiracaoHoras) {
+        byte[] bytes = Decoders.BASE64.decode(secret);
+        if (bytes.length < 32) {
+            throw new IllegalStateException("JWT_SECRET precisa ter pelo menos 256 bits (32 bytes) em Base64");
+        }
+        this.key = Keys.hmacShaKeyFor(bytes);
+        this.expiracaoHoras = expiracaoHoras;
+    }
 
     public String gerarToken(Usuario usuario) {
+        var agora = Instant.now();
         return Jwts.builder()
-                .setIssuer("API Palm Invest")
-                .setSubject(usuario.getEmail())
-                .setExpiration(Date.from(dataExpiracao()))
+                .issuer(ISSUER)
+                .subject(usuario.getEmail())
+                .issuedAt(Date.from(agora))
+                .expiration(Date.from(agora.plus(expiracaoHoras, ChronoUnit.HOURS)))
                 .signWith(key)
                 .compact();
     }
 
-    private Instant dataExpiracao() {
-        return LocalDateTime.now().plusHours(2).toInstant(ZoneOffset.of("-03:00"));
+    // Valida assinatura, emissor e expiração; lança JwtException se o token for inválido
+    public String getSubject(String tokenJWT) {
+        return Jwts.parser()
+                .verifyWith(key)
+                .requireIssuer(ISSUER)
+                .build()
+                .parseSignedClaims(tokenJWT)
+                .getPayload()
+                .getSubject();
     }
 }

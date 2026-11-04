@@ -1,10 +1,9 @@
 package com.palminvest.api;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class PalmInvestApiApplicationTests {
+// Sobe o contexto completo no perfil de teste (H2 + chave JWT aleatória)
+class PalmInvestApiApplicationTests extends IntegracaoTestBase {
 
 	@Test
 	void contextLoads() {
