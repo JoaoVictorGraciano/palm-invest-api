@@ -25,6 +25,7 @@ public class Transaction {
     private String assetSymbol;
     @Column(precision = 19, scale = 8) // Aceita frações (cripto, fundos)
     private BigDecimal quantity;
+    @Column(precision = 19, scale = 8) // Preços fracionados (cripto, ativos abaixo de 1 centavo)
     private BigDecimal price;
     private LocalDateTime transactionDate;
     private String observation; // Campo opcional de anotações
