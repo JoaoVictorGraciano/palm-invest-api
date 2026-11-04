@@ -41,9 +41,10 @@ public class Transaction {
     // Construtor vazio obrigatório
     public Transaction() {}
 
-    // Cria a transação a partir dos dados validados do Front (o id é gerado pelo banco)
-    public Transaction(DadosCadastroTransacaoDTO dados) {
+    // Cria a transação a partir dos dados validados do Front (o id é gerado pelo banco e o dono vem do token)
+    public Transaction(DadosCadastroTransacaoDTO dados, Usuario usuario) {
         atualizarInformacoes(dados);
+        this.usuario = usuario;
     }
 
     // Usado no PUT: substitui os campos editáveis
