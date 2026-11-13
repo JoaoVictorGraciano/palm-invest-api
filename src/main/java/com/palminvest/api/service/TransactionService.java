@@ -15,6 +15,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -68,6 +69,14 @@ public class TransactionService {
         validarSaldo(usuario, transaction.getAssetSymbol(), id, null);
         repository.delete(transaction);
         return true;
+    }
+
+    // Remove o ativo inteiro (compras e vendas) numa única transação de banco: ou apaga tudo, ou nada.
+    // Não precisa validar saldo, porque a linha do tempo do símbolo fica vazia. Devolve quantas apagou.
+    @Transactional
+    public long excluirPorSimbolo(String assetSymbol, Usuario usuario) {
+        var simbolo = assetSymbol.trim().toUpperCase(Locale.ROOT);
+        return repository.deleteByUsuarioAndAssetSymbol(usuario, simbolo);
     }
 
     /**

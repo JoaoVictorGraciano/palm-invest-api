@@ -241,6 +241,59 @@ class TransactionControllerTest extends IntegracaoTestBase {
         return jsonMapper.readTree(resposta).get("id").asLong();
     }
 
+    // --- DELETE por ativo ---
+
+    @Test
+    void deleteDoAtivoApagaSoAsDoSimboloEDoUsuario() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var tokenB = novoUsuarioComToken("B", "b@exemplo.com");
+        criarTransacao(tokenA, new BigDecimal("10"));                 // PETR4 de A
+        criarTransacao(tokenA, new BigDecimal("5"));                  // PETR4 de A
+        long idVale = criarTransacaoDoSimbolo(tokenA, "VALE3");       // outro ativo de A
+        long idPetrDeB = criarTransacao(tokenB, new BigDecimal("1")); // PETR4 de B
+
+        mockMvc.perform(delete(ROTA).param("assetSymbol", " petr4 ").header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assetSymbol").value("PETR4"))
+                .andExpect(jsonPath("$.excluidas").value(2));
+
+        assertEquals(2, transactionRepository.count());
+        assertTrue(transactionRepository.findById(idVale).isPresent());
+        assertTrue(transactionRepository.findById(idPetrDeB).isPresent());
+    }
+
+    @Test
+    void deleteDoAtivoSemTransacoesRetorna404() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var tokenB = novoUsuarioComToken("B", "b@exemplo.com");
+        criarTransacao(tokenB, new BigDecimal("1")); // PETR4 só de B
+
+        mockMvc.perform(delete(ROTA).param("assetSymbol", "PETR4").header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isNotFound());
+        assertEquals(1, transactionRepository.count());
+    }
+
+    @Test
+    void deleteDoAtivoSemParametroOuEmBrancoRetorna400() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+
+        mockMvc.perform(delete(ROTA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$[0].campo").value("assetSymbol"));
+        mockMvc.perform(delete(ROTA).param("assetSymbol", "  ").header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$[0].campo").value("assetSymbol"));
+    }
+
+    private long criarTransacaoDoSimbolo(String token, String simbolo) throws Exception {
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("1")));
+        corpo.put("assetSymbol", simbolo);
+        var resposta = postTransacao(token, corpo)
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return jsonMapper.readTree(resposta).get("id").asLong();
+    }
+
     // --- Isolamento entre usuários ---
 
     @Test

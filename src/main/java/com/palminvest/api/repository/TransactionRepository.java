@@ -17,6 +17,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     // Histórico de um ativo do usuário, para o cálculo de saldo (a ordenação é feita no serviço)
     List<Transaction> findAllByUsuarioAndAssetSymbol(Usuario usuario, String assetSymbol);
 
+    // Apaga todas as transações de um ativo do usuário e devolve quantas foram; roda dentro da transação do serviço
+    long deleteByUsuarioAndAssetSymbol(Usuario usuario, String assetSymbol);
+
     // Vazio se a transação não existe OU pertence a outro usuário (o controller devolve 404 nos dois casos)
     Optional<Transaction> findByIdAndUsuario(Long id, Usuario usuario);
 }
