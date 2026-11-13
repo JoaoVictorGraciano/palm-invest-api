@@ -14,7 +14,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -61,5 +63,11 @@ public class AutenticacaoController {
         repository.save(usuario);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(new DadosDetalhamentoUsuarioDTO(usuario));
+    }
+
+    // Quem sou eu: dados do usuário dono do token (rota protegida; sem token o filtro já responde 401)
+    @GetMapping("/me")
+    public DadosDetalhamentoUsuarioDTO me(@AuthenticationPrincipal Usuario usuario) {
+        return new DadosDetalhamentoUsuarioDTO(usuario);
     }
 }
