@@ -214,6 +214,32 @@ class TransactionControllerTest extends IntegracaoTestBase {
         assertEquals(0, transactionRepository.count());
     }
 
+    // --- ordenação ---
+
+    @Test
+    void getDevolveDaMaisRecenteParaAMaisAntiga() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        // Cria fora de ordem cronológica: meio, antiga, recente
+        long idMeio = criarTransacaoNaData(tokenA, "2025-03-10T10:00:00");
+        long idAntiga = criarTransacaoNaData(tokenA, "2025-01-05T10:00:00");
+        long idRecente = criarTransacaoNaData(tokenA, "2025-06-20T10:00:00");
+
+        mockMvc.perform(get(ROTA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(idRecente))
+                .andExpect(jsonPath("$[1].id").value(idMeio))
+                .andExpect(jsonPath("$[2].id").value(idAntiga));
+    }
+
+    private long criarTransacaoNaData(String token, String data) throws Exception {
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("1")));
+        corpo.put("transactionDate", data);
+        var resposta = postTransacao(token, corpo)
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return jsonMapper.readTree(resposta).get("id").asLong();
+    }
+
     // --- Isolamento entre usuários ---
 
     @Test

@@ -22,10 +22,10 @@ public class TransactionController {
     @Autowired
     private TransactionRepository repository;
 
-    // Rota GET: Retorna só as transações do usuário logado
+    // Rota GET: Retorna só as transações do usuário logado, ordenadas por data (mais recente primeiro)
     @GetMapping
     public List<DadosDetalhamentoTransacaoDTO> listarTodas(@AuthenticationPrincipal Usuario usuario) {
-        return repository.findAllByUsuario(usuario).stream().map(DadosDetalhamentoTransacaoDTO::new).toList();
+        return repository.findAllByUsuarioOrderByTransactionDateDescIdDesc(usuario).stream().map(DadosDetalhamentoTransacaoDTO::new).toList();
     }
 
     // Rota POST: Recebe uma transação nova do Front e salva no banco com o usuário logado como dono
