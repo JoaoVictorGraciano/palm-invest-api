@@ -83,6 +83,12 @@ public class TratadorDeErros {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(new DadosErro("Método não suportado"));
     }
 
+    // Regra do domínio violada (ex: vender mais do que se tem): 422 com a mensagem
+    @ExceptionHandler(RegraDeNegocioException.class)
+    public ResponseEntity<DadosErro> tratarRegraDeNegocio(RegraDeNegocioException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(new DadosErro(ex.getMessage()));
+    }
+
     // Regra de negócio violada (ex: e-mail já cadastrado): 409 com a mensagem
     @ExceptionHandler(ConflitoException.class)
     public ResponseEntity<DadosErro> tratarConflito(ConflitoException ex) {

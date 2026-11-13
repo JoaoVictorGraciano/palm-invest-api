@@ -79,6 +79,7 @@ class TransactionControllerTest extends IntegracaoTestBase {
     @Test
     void typeSellEhAceitoEDevolvido() throws Exception {
         var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        criarTransacao(tokenA, new BigDecimal("10")); // compra que cobre a venda
         var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
         corpo.put("type", "SELL");
 

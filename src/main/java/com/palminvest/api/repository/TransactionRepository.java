@@ -14,6 +14,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     // Só as transações do usuário logado, da mais recente para a mais antiga (id desempata datas iguais)
     List<Transaction> findAllByUsuarioOrderByTransactionDateDescIdDesc(Usuario usuario);
 
+    // Histórico de um ativo do usuário, para o cálculo de saldo (a ordenação é feita no serviço)
+    List<Transaction> findAllByUsuarioAndAssetSymbol(Usuario usuario, String assetSymbol);
+
     // Vazio se a transação não existe OU pertence a outro usuário (o controller devolve 404 nos dois casos)
     Optional<Transaction> findByIdAndUsuario(Long id, Usuario usuario);
 }
