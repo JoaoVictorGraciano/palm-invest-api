@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
@@ -29,6 +30,11 @@ public class TokenService {
         }
         this.key = Keys.hmacShaKeyFor(bytes);
         this.expiracaoHoras = expiracaoHoras;
+    }
+
+    // Validade do token em segundos, para o front saber quando a sessão vai expirar
+    public long getExpiracaoSegundos() {
+        return Duration.ofHours(expiracaoHoras).toSeconds();
     }
 
     public String gerarToken(Usuario usuario) {

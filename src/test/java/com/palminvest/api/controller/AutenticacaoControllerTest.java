@@ -77,7 +77,9 @@ class AutenticacaoControllerTest extends IntegracaoTestBase {
 
         postLogin("joao@exemplo.com", SENHA_TESTE)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").isString());
+                .andExpect(jsonPath("$.token").isString())
+                // 2 horas por padrão (JWT_EXPIRATION_HOURS), em segundos
+                .andExpect(jsonPath("$.expiresIn").value(7200));
     }
 
     @Test

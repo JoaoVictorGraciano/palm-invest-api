@@ -48,8 +48,8 @@ public class AutenticacaoController {
         // Se passar, gera o Token JWT
         var tokenJWT = tokenService.gerarToken((Usuario) authentication.getPrincipal());
 
-        // Devolve o Token para o Front-End no formato JSON: { "token": "eyjh..." }
-        return ResponseEntity.ok(new DadosTokenJWT(tokenJWT));
+        // Devolve o Token e a validade para o Front-End: { "token": "eyjh...", "expiresIn": 7200 }
+        return ResponseEntity.ok(new DadosTokenJWT(tokenJWT, tokenService.getExpiracaoSegundos()));
     }
 
     @PostMapping("/cadastrar")
