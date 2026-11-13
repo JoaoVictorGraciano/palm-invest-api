@@ -8,6 +8,8 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
+import com.palminvest.api.model.TransactionType;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Locale;
@@ -16,7 +18,7 @@ import java.util.Locale;
 // Os @Digits espelham as colunas (quantity e price numeric(19,8); fee numeric(38,2)):
 // casas decimais a mais viram 400 em vez de serem arredondadas em silêncio pelo banco.
 public record DadosCadastroTransacaoDTO(
-        @NotBlank @Size(max = 20) String type,
+        @NotNull TransactionType type,
         @NotBlank @Size(max = 20) String assetSymbol,
         @NotNull @Positive @Digits(integer = 11, fraction = 8) BigDecimal quantity,
         @NotNull @Positive @Digits(integer = 11, fraction = 8) BigDecimal price,

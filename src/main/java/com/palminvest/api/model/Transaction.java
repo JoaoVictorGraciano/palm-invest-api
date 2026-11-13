@@ -3,6 +3,8 @@ package com.palminvest.api.model;
 import com.palminvest.api.dto.DadosCadastroTransacaoDTO;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,7 +23,8 @@ public class Transaction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String type;
+    @Enumerated(EnumType.STRING)
+    private TransactionType type;
     private String assetSymbol;
     @Column(precision = 19, scale = 8) // Aceita frações (cripto, fundos)
     private BigDecimal quantity;
@@ -64,8 +67,8 @@ public class Transaction {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public String getType() { return type; }
-    public void setType(String type) { this.type = type; }
+    public TransactionType getType() { return type; }
+    public void setType(TransactionType type) { this.type = type; }
 
     public String getAssetSymbol() { return assetSymbol; }
     public void setAssetSymbol(String assetSymbol) { this.assetSymbol = assetSymbol; }

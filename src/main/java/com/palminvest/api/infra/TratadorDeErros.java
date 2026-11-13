@@ -15,7 +15,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import tools.jackson.databind.exc.InvalidFormatException;
 
+import java.util.Arrays;
 import java.util.List;
 
 @RestControllerAdvice
@@ -30,10 +32,25 @@ public class TratadorDeErros {
         return ResponseEntity.badRequest().body(erros);
     }
 
-    // JSON malformado ou tipo errado (ex: data inválida, texto no lugar de número)
+    // JSON malformado ou tipo errado (ex: data inválida, texto no lugar de número).
+    // Quando o Jackson diz qual campo falhou, devolve no mesmo formato da validação,
+    // listando os valores aceitos se o campo for um enum (ex: type: use BUY ou SELL)
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<DadosErro> tratarJsonInvalido() {
+    public ResponseEntity<?> tratarJsonInvalido(HttpMessageNotReadableException ex) {
+        if (ex.getCause() instanceof InvalidFormatException causa && !causa.getPath().isEmpty()) {
+            var campo = causa.getPath().get(causa.getPath().size() - 1).getPropertyName();
+            if (campo != null) {
+                var mensagem = causa.getTargetType() != null && causa.getTargetType().isEnum()
+                        ? "valor inválido; use " + String.join(", ", valoresDoEnum(causa.getTargetType()))
+                        : "valor inválido";
+                return ResponseEntity.badRequest().body(List.of(new DadosErroValidacao(campo, mensagem)));
+            }
+        }
         return ResponseEntity.badRequest().body(new DadosErro("Corpo da requisição inválido"));
+    }
+
+    private static List<String> valoresDoEnum(Class<?> tipoEnum) {
+        return Arrays.stream(tipoEnum.getEnumConstants()).map(Object::toString).toList();
     }
 
     // Path ou query param com tipo errado (ex: /api/transactions/abc): 400 no mesmo formato da validação

@@ -1,6 +1,7 @@
 package com.palminvest.api.dto;
 
 import com.palminvest.api.model.Transaction;
+import com.palminvest.api.model.TransactionType;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -8,7 +9,7 @@ import java.time.LocalDateTime;
 // Formato da transação devolvida para o Front (nunca expõe a entidade direto)
 public record DadosDetalhamentoTransacaoDTO(
         Long id,
-        String type,
+        TransactionType type,
         String assetSymbol,
         BigDecimal quantity,
         BigDecimal price,

@@ -105,7 +105,7 @@ public abstract class IntegracaoTestBase {
     // Corpo válido de transação, para os testes alterarem só o que interessa
     protected Map<String, Object> transacaoValida(BigDecimal quantity) {
         return Map.of(
-                "type", "COMPRA",
+                "type", "BUY",
                 "assetSymbol", "PETR4",
                 "quantity", quantity,
                 "price", new BigDecimal("38.20"),

@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -56,6 +57,33 @@ class TransactionControllerTest extends IntegracaoTestBase {
 
         var salva = transactionRepository.findById(jsonMapper.readTree(resposta).get("id").asLong()).orElseThrow();
         assertEquals("PETR4", salva.getAssetSymbol());
+    }
+
+    // --- type ---
+
+    @Test
+    void typeForaDoEnumRetorna400ComValoresAceitos() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.put("type", "COMPRA");
+
+        postTransacao(tokenA, corpo)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$[0].campo").value("type"))
+                .andExpect(jsonPath("$[0].mensagem").value(containsString("BUY, SELL")));
+
+        assertEquals(0, transactionRepository.count());
+    }
+
+    @Test
+    void typeSellEhAceitoEDevolvido() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.put("type", "SELL");
+
+        postTransacao(tokenA, corpo)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.type").value("SELL"));
     }
 
     // --- quantity ---
