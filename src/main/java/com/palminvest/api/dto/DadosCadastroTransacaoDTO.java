@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 // Dados que o Front pode enviar no POST/PUT. Não tem "id": quem gera é o banco.
 // Os @Digits espelham as colunas (quantity e price numeric(19,8); fee numeric(38,2)):
@@ -24,4 +25,11 @@ public record DadosCadastroTransacaoDTO(
         @PositiveOrZero @Digits(integer = 36, fraction = 2) BigDecimal fee,
         @Size(max = 255) String observation
 ) {
+    // Símbolo sempre em maiúsculas e sem espaços, para "petr4" e "PETR4" serem o mesmo ativo
+    // (saldo de venda e exclusão por ativo dependem disso)
+    public DadosCadastroTransacaoDTO {
+        if (assetSymbol != null) {
+            assetSymbol = assetSymbol.trim().toUpperCase(Locale.ROOT);
+        }
+    }
 }

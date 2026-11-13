@@ -43,6 +43,21 @@ class TransactionControllerTest extends IntegracaoTestBase {
         assertEquals(idDoUsuario("a@exemplo.com"), salva.getUsuario().getId());
     }
 
+    @Test
+    void postNormalizaAssetSymbolParaMaiusculasSemEspacos() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.put("assetSymbol", "  petr4 ");
+
+        var resposta = postTransacao(tokenA, corpo)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.assetSymbol").value("PETR4"))
+                .andReturn().getResponse().getContentAsString();
+
+        var salva = transactionRepository.findById(jsonMapper.readTree(resposta).get("id").asLong()).orElseThrow();
+        assertEquals("PETR4", salva.getAssetSymbol());
+    }
+
     // --- quantity ---
 
     @Test
