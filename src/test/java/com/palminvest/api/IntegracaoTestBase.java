@@ -107,6 +107,7 @@ public abstract class IntegracaoTestBase {
         return Map.of(
                 "type", "BUY",
                 "assetSymbol", "PETR4",
+                "assetClass", "STOCK",
                 "quantity", quantity,
                 "price", new BigDecimal("38.20"),
                 "transactionDate", LocalDateTime.now().minusDays(1).withNano(0).toString(),

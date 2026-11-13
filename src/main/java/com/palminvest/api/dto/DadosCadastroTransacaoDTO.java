@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
+import com.palminvest.api.model.AssetClass;
 import com.palminvest.api.model.TransactionType;
 
 import java.math.BigDecimal;
@@ -20,6 +21,7 @@ import java.util.Locale;
 public record DadosCadastroTransacaoDTO(
         @NotNull TransactionType type,
         @NotBlank @Size(max = 20) String assetSymbol,
+        @NotNull AssetClass assetClass,
         @NotNull @Positive @Digits(integer = 11, fraction = 8) BigDecimal quantity,
         @NotNull @Positive @Digits(integer = 11, fraction = 8) BigDecimal price,
         @NotNull @PastOrPresent LocalDateTime transactionDate,

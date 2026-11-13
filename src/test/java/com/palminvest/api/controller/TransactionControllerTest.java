@@ -1,6 +1,7 @@
 package com.palminvest.api.controller;
 
 import com.palminvest.api.IntegracaoTestBase;
+import com.palminvest.api.model.AssetClass;
 import com.palminvest.api.model.Usuario;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -84,6 +85,58 @@ class TransactionControllerTest extends IntegracaoTestBase {
         postTransacao(tokenA, corpo)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.type").value("SELL"));
+    }
+
+    // --- assetClass ---
+
+    @Test
+    void postSemAssetClassRetorna400() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.remove("assetClass");
+
+        postTransacao(tokenA, corpo)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$[*].campo", hasItem("assetClass")));
+
+        assertEquals(0, transactionRepository.count());
+    }
+
+    @Test
+    void assetClassForaDoEnumRetorna400ComValoresAceitos() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.put("assetClass", "FII");
+
+        postTransacao(tokenA, corpo)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$[0].campo").value("assetClass"))
+                .andExpect(jsonPath("$[0].mensagem").value(containsString("STOCK, CRYPTO")));
+    }
+
+    @Test
+    void assetClassEhPersistidaEDevolvidaNoPostPutEGet() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("0.5")));
+        corpo.put("assetSymbol", "BTC");
+        corpo.put("assetClass", "CRYPTO");
+
+        var resposta = postTransacao(tokenA, corpo)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.assetClass").value("CRYPTO"))
+                .andReturn().getResponse().getContentAsString();
+        long id = jsonMapper.readTree(resposta).get("id").asLong();
+
+        mockMvc.perform(get(ROTA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].assetClass").value("CRYPTO"));
+
+        // PUT troca a classe (corrigindo um cadastro errado) e o banco reflete
+        corpo.put("assetClass", "STOCK");
+        putTransacao(tokenA, id, corpo)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assetClass").value("STOCK"));
+        assertEquals(AssetClass.STOCK, transactionRepository.findById(id).orElseThrow().getAssetClass());
     }
 
     // --- quantity ---

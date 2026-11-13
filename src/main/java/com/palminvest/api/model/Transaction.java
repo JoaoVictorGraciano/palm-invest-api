@@ -26,6 +26,9 @@ public class Transaction {
     @Enumerated(EnumType.STRING)
     private TransactionType type;
     private String assetSymbol;
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20, nullable = false) // Ação (B3) ou cripto: define o provedor de cotação no front
+    private AssetClass assetClass;
     @Column(precision = 19, scale = 8) // Aceita frações (cripto, fundos)
     private BigDecimal quantity;
     @Column(precision = 19, scale = 8) // Preços fracionados (cripto, ativos abaixo de 1 centavo)
@@ -55,6 +58,7 @@ public class Transaction {
     public void atualizarInformacoes(DadosCadastroTransacaoDTO dados) {
         this.type = dados.type();
         this.assetSymbol = dados.assetSymbol();
+        this.assetClass = dados.assetClass();
         this.quantity = dados.quantity();
         this.price = dados.price();
         this.transactionDate = dados.transactionDate();
@@ -72,6 +76,9 @@ public class Transaction {
 
     public String getAssetSymbol() { return assetSymbol; }
     public void setAssetSymbol(String assetSymbol) { this.assetSymbol = assetSymbol; }
+
+    public AssetClass getAssetClass() { return assetClass; }
+    public void setAssetClass(AssetClass assetClass) { this.assetClass = assetClass; }
 
     public BigDecimal getQuantity() { return quantity; }
     public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
