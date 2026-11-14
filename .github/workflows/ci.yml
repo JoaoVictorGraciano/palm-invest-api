@@ -1,0 +1,49 @@
+# CI da palm-invest-api: compila e roda a suíte em todo push e pull request para a main.
+# Os testes usam H2 em memória e geram a chave JWT na hora (IntegracaoTestBase),
+# então o workflow não precisa de segredo nem de variável de ambiente real.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build e testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 21 (Temurin) com cache do Maven
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # O projeto nasceu no Windows; o bit de execução está versionado, mas isto protege contra regressão
+      - name: Garantir mvnw executável
+        run: chmod +x mvnw
+
+      - name: Build, testes e verificação
+        run: ./mvnw -B verify
+
+      - name: Relatórios de teste (em caso de falha)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore

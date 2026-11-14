@@ -1,5 +1,7 @@
 # palm-invest-api
 
+[![CI](https://github.com/JoaoVictorGraciano/palm-invest-api/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/JoaoVictorGraciano/palm-invest-api/actions/workflows/ci.yml)
+
 API REST da carteira de investimentos **Palm Invest**. Guarda usuários e suas transações de compra e venda
 (ações da B3 e criptomoedas); o front em `../palm-invest` deriva carteira, custo médio e histórico a partir delas.
 
