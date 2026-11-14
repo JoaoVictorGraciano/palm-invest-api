@@ -107,12 +107,33 @@ class TransactionControllerTest extends IntegracaoTestBase {
     void assetClassForaDoEnumRetorna400ComValoresAceitos() throws Exception {
         var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
         var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
-        corpo.put("assetClass", "FII");
+        corpo.put("assetClass", "ACAO");
 
         postTransacao(tokenA, corpo)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$[0].campo").value("assetClass"))
-                .andExpect(jsonPath("$[0].mensagem").value(containsString("STOCK, CRYPTO")));
+                .andExpect(jsonPath("$[0].mensagem").value(containsString("STOCK, CRYPTO, FII, ETF, BDR")));
+    }
+
+    @Test
+    void assetClassAceitaFiiEtfEBdr() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var exemplos = Map.of("FII", "HGLG11", "ETF", "BOVA11", "BDR", "AAPL34");
+
+        // Passa pelo enum, pela coluna e pelo CHECK do banco (a migração V5 precisa ter ampliado a lista)
+        for (var exemplo : exemplos.entrySet()) {
+            var corpo = new HashMap<>(transacaoValida(new BigDecimal("1")));
+            corpo.put("assetClass", exemplo.getKey());
+            corpo.put("assetSymbol", exemplo.getValue());
+
+            var resposta = postTransacao(tokenA, corpo)
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.assetClass").value(exemplo.getKey()))
+                    .andReturn().getResponse().getContentAsString();
+            long id = jsonMapper.readTree(resposta).get("id").asLong();
+            assertEquals(AssetClass.valueOf(exemplo.getKey()), transactionRepository.findById(id).orElseThrow().getAssetClass());
+        }
+        assertEquals(3, transactionRepository.count());
     }
 
     @Test

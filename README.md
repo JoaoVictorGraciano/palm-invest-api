@@ -115,7 +115,7 @@ Corpo do `POST`/`PUT` (sem `id`):
 |---|---|
 | `type` | `BUY` ou `SELL` |
 | `assetSymbol` | obrigatório, até 20 caracteres; normalizado para maiúsculas sem espaços |
-| `assetClass` | `STOCK` ou `CRYPTO`, obrigatório |
+| `assetClass` | `STOCK`, `CRYPTO`, `FII`, `ETF` ou `BDR`, obrigatório |
 | `quantity`, `price` | maiores que zero, até 8 casas decimais (`numeric(19,8)`) |
 | `transactionDate` | data/hora local sem fuso, não pode ser futura |
 | `broker` | opcional, até 100 |
