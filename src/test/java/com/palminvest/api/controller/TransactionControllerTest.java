@@ -1,6 +1,7 @@
 package com.palminvest.api.controller;
 
 import com.palminvest.api.IntegracaoTestBase;
+import com.palminvest.api.model.AssetClass;
 import com.palminvest.api.model.Usuario;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -10,6 +11,7 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -41,6 +43,101 @@ class TransactionControllerTest extends IntegracaoTestBase {
         assertNotEquals(999L, id);
         var salva = transactionRepository.findById(id).orElseThrow();
         assertEquals(idDoUsuario("a@exemplo.com"), salva.getUsuario().getId());
+    }
+
+    @Test
+    void postNormalizaAssetSymbolParaMaiusculasSemEspacos() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.put("assetSymbol", "  petr4 ");
+
+        var resposta = postTransacao(tokenA, corpo)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.assetSymbol").value("PETR4"))
+                .andReturn().getResponse().getContentAsString();
+
+        var salva = transactionRepository.findById(jsonMapper.readTree(resposta).get("id").asLong()).orElseThrow();
+        assertEquals("PETR4", salva.getAssetSymbol());
+    }
+
+    // --- type ---
+
+    @Test
+    void typeForaDoEnumRetorna400ComValoresAceitos() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.put("type", "COMPRA");
+
+        postTransacao(tokenA, corpo)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$[0].campo").value("type"))
+                .andExpect(jsonPath("$[0].mensagem").value(containsString("BUY, SELL")));
+
+        assertEquals(0, transactionRepository.count());
+    }
+
+    @Test
+    void typeSellEhAceitoEDevolvido() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        criarTransacao(tokenA, new BigDecimal("10")); // compra que cobre a venda
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.put("type", "SELL");
+
+        postTransacao(tokenA, corpo)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.type").value("SELL"));
+    }
+
+    // --- assetClass ---
+
+    @Test
+    void postSemAssetClassRetorna400() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.remove("assetClass");
+
+        postTransacao(tokenA, corpo)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$[*].campo", hasItem("assetClass")));
+
+        assertEquals(0, transactionRepository.count());
+    }
+
+    @Test
+    void assetClassForaDoEnumRetorna400ComValoresAceitos() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("10")));
+        corpo.put("assetClass", "FII");
+
+        postTransacao(tokenA, corpo)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$[0].campo").value("assetClass"))
+                .andExpect(jsonPath("$[0].mensagem").value(containsString("STOCK, CRYPTO")));
+    }
+
+    @Test
+    void assetClassEhPersistidaEDevolvidaNoPostPutEGet() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("0.5")));
+        corpo.put("assetSymbol", "BTC");
+        corpo.put("assetClass", "CRYPTO");
+
+        var resposta = postTransacao(tokenA, corpo)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.assetClass").value("CRYPTO"))
+                .andReturn().getResponse().getContentAsString();
+        long id = jsonMapper.readTree(resposta).get("id").asLong();
+
+        mockMvc.perform(get(ROTA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].assetClass").value("CRYPTO"));
+
+        // PUT troca a classe (corrigindo um cadastro errado) e o banco reflete
+        corpo.put("assetClass", "STOCK");
+        putTransacao(tokenA, id, corpo)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assetClass").value("STOCK"));
+        assertEquals(AssetClass.STOCK, transactionRepository.findById(id).orElseThrow().getAssetClass());
     }
 
     // --- quantity ---
@@ -116,6 +213,85 @@ class TransactionControllerTest extends IntegracaoTestBase {
                 .andExpect(jsonPath("$[*].campo", hasItem("price")));
 
         assertEquals(0, transactionRepository.count());
+    }
+
+    // --- ordenação ---
+
+    @Test
+    void getDevolveDaMaisRecenteParaAMaisAntiga() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        // Cria fora de ordem cronológica: meio, antiga, recente
+        long idMeio = criarTransacaoNaData(tokenA, "2025-03-10T10:00:00");
+        long idAntiga = criarTransacaoNaData(tokenA, "2025-01-05T10:00:00");
+        long idRecente = criarTransacaoNaData(tokenA, "2025-06-20T10:00:00");
+
+        mockMvc.perform(get(ROTA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(idRecente))
+                .andExpect(jsonPath("$[1].id").value(idMeio))
+                .andExpect(jsonPath("$[2].id").value(idAntiga));
+    }
+
+    private long criarTransacaoNaData(String token, String data) throws Exception {
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("1")));
+        corpo.put("transactionDate", data);
+        var resposta = postTransacao(token, corpo)
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return jsonMapper.readTree(resposta).get("id").asLong();
+    }
+
+    // --- DELETE por ativo ---
+
+    @Test
+    void deleteDoAtivoApagaSoAsDoSimboloEDoUsuario() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var tokenB = novoUsuarioComToken("B", "b@exemplo.com");
+        criarTransacao(tokenA, new BigDecimal("10"));                 // PETR4 de A
+        criarTransacao(tokenA, new BigDecimal("5"));                  // PETR4 de A
+        long idVale = criarTransacaoDoSimbolo(tokenA, "VALE3");       // outro ativo de A
+        long idPetrDeB = criarTransacao(tokenB, new BigDecimal("1")); // PETR4 de B
+
+        mockMvc.perform(delete(ROTA).param("assetSymbol", " petr4 ").header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assetSymbol").value("PETR4"))
+                .andExpect(jsonPath("$.excluidas").value(2));
+
+        assertEquals(2, transactionRepository.count());
+        assertTrue(transactionRepository.findById(idVale).isPresent());
+        assertTrue(transactionRepository.findById(idPetrDeB).isPresent());
+    }
+
+    @Test
+    void deleteDoAtivoSemTransacoesRetorna404() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+        var tokenB = novoUsuarioComToken("B", "b@exemplo.com");
+        criarTransacao(tokenB, new BigDecimal("1")); // PETR4 só de B
+
+        mockMvc.perform(delete(ROTA).param("assetSymbol", "PETR4").header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isNotFound());
+        assertEquals(1, transactionRepository.count());
+    }
+
+    @Test
+    void deleteDoAtivoSemParametroOuEmBrancoRetorna400() throws Exception {
+        var tokenA = novoUsuarioComToken("A", "a@exemplo.com");
+
+        mockMvc.perform(delete(ROTA).header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$[0].campo").value("assetSymbol"));
+        mockMvc.perform(delete(ROTA).param("assetSymbol", "  ").header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$[0].campo").value("assetSymbol"));
+    }
+
+    private long criarTransacaoDoSimbolo(String token, String simbolo) throws Exception {
+        var corpo = new HashMap<>(transacaoValida(new BigDecimal("1")));
+        corpo.put("assetSymbol", simbolo);
+        var resposta = postTransacao(token, corpo)
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return jsonMapper.readTree(resposta).get("id").asLong();
     }
 
     // --- Isolamento entre usuários ---

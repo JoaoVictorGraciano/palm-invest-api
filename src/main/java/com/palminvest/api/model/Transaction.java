@@ -3,6 +3,8 @@ package com.palminvest.api.model;
 import com.palminvest.api.dto.DadosCadastroTransacaoDTO;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,8 +23,12 @@ public class Transaction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String type;
+    @Enumerated(EnumType.STRING)
+    private TransactionType type;
     private String assetSymbol;
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20, nullable = false) // Ação (B3) ou cripto: define o provedor de cotação no front
+    private AssetClass assetClass;
     @Column(precision = 19, scale = 8) // Aceita frações (cripto, fundos)
     private BigDecimal quantity;
     @Column(precision = 19, scale = 8) // Preços fracionados (cripto, ativos abaixo de 1 centavo)
@@ -52,6 +58,7 @@ public class Transaction {
     public void atualizarInformacoes(DadosCadastroTransacaoDTO dados) {
         this.type = dados.type();
         this.assetSymbol = dados.assetSymbol();
+        this.assetClass = dados.assetClass();
         this.quantity = dados.quantity();
         this.price = dados.price();
         this.transactionDate = dados.transactionDate();
@@ -64,11 +71,14 @@ public class Transaction {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public String getType() { return type; }
-    public void setType(String type) { this.type = type; }
+    public TransactionType getType() { return type; }
+    public void setType(TransactionType type) { this.type = type; }
 
     public String getAssetSymbol() { return assetSymbol; }
     public void setAssetSymbol(String assetSymbol) { this.assetSymbol = assetSymbol; }
+
+    public AssetClass getAssetClass() { return assetClass; }
+    public void setAssetClass(AssetClass assetClass) { this.assetClass = assetClass; }
 
     public BigDecimal getQuantity() { return quantity; }
     public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }

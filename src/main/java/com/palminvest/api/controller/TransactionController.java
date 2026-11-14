@@ -2,30 +2,33 @@ package com.palminvest.api.controller;
 
 import com.palminvest.api.dto.DadosCadastroTransacaoDTO;
 import com.palminvest.api.dto.DadosDetalhamentoTransacaoDTO;
-import com.palminvest.api.model.Transaction;
+import com.palminvest.api.dto.DadosExclusaoPorAtivoDTO;
 import com.palminvest.api.model.Usuario;
-import com.palminvest.api.repository.TransactionRepository;
+import com.palminvest.api.service.TransactionService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Locale;
 
-// Toda rota usa o usuário do token (@AuthenticationPrincipal): ninguém enxerga transação de outra pessoa
+// Toda rota usa o usuário do token (@AuthenticationPrincipal): ninguém enxerga transação de outra pessoa.
+// As regras (saldo de venda) ficam no TransactionService; aqui só HTTP.
 @RestController
 @RequestMapping("/api/transactions")
 public class TransactionController {
 
     @Autowired
-    private TransactionRepository repository;
+    private TransactionService service;
 
-    // Rota GET: Retorna só as transações do usuário logado
+    // Rota GET: Retorna só as transações do usuário logado, ordenadas por data (mais recente primeiro)
     @GetMapping
     public List<DadosDetalhamentoTransacaoDTO> listarTodas(@AuthenticationPrincipal Usuario usuario) {
-        return repository.findAllByUsuario(usuario).stream().map(DadosDetalhamentoTransacaoDTO::new).toList();
+        return service.listar(usuario).stream().map(DadosDetalhamentoTransacaoDTO::new).toList();
     }
 
     // Rota POST: Recebe uma transação nova do Front e salva no banco com o usuário logado como dono
@@ -33,19 +36,30 @@ public class TransactionController {
     @ResponseStatus(HttpStatus.CREATED)
     public DadosDetalhamentoTransacaoDTO criarTransacao(@RequestBody @Valid DadosCadastroTransacaoDTO dados,
                                                         @AuthenticationPrincipal Usuario usuario) {
-        var transaction = repository.save(new Transaction(dados, usuario));
-        return new DadosDetalhamentoTransacaoDTO(transaction);
+        return new DadosDetalhamentoTransacaoDTO(service.criar(dados, usuario));
     }
 
     // Rota DELETE: Apaga uma transação do usuário logado (404 se não existir ou for de outro usuário)
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deletarTransacao(@PathVariable Long id, @AuthenticationPrincipal Usuario usuario) {
-        return repository.findByIdAndUsuario(id, usuario)
-                .map(transaction -> {
-                    repository.delete(transaction);
-                    return ResponseEntity.noContent().<Void>build();
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return service.excluir(id, usuario)
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
+    }
+
+    // Rota DELETE por ativo: apaga todas as transações do símbolo do usuário logado de uma vez
+    // (404 se ele não tem nenhuma; 400 se o parâmetro vier ausente ou em branco)
+    @DeleteMapping
+    public ResponseEntity<DadosExclusaoPorAtivoDTO> deletarPorAtivo(@RequestParam String assetSymbol,
+                                                                    @AuthenticationPrincipal Usuario usuario) throws MissingServletRequestParameterException {
+        if (assetSymbol.isBlank()) {
+            throw new MissingServletRequestParameterException("assetSymbol", "String");
+        }
+        var simbolo = assetSymbol.trim().toUpperCase(Locale.ROOT);
+        long excluidas = service.excluirPorSimbolo(simbolo, usuario);
+        return excluidas == 0
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(new DadosExclusaoPorAtivoDTO(simbolo, excluidas));
     }
 
     // 🚀 ROTA PARA EDITAR A TRANSAÇÃO (404 se não existir ou for de outro usuário)
@@ -53,13 +67,8 @@ public class TransactionController {
     public ResponseEntity<DadosDetalhamentoTransacaoDTO> updateTransaction(@PathVariable Long id,
                                                                            @RequestBody @Valid DadosCadastroTransacaoDTO dados,
                                                                            @AuthenticationPrincipal Usuario usuario) {
-        return repository.findByIdAndUsuario(id, usuario)
-                .map(transaction -> {
-                    transaction.atualizarInformacoes(dados);
-
-                    Transaction savedTransaction = repository.save(transaction);
-                    return ResponseEntity.ok(new DadosDetalhamentoTransacaoDTO(savedTransaction));
-                })
+        return service.atualizar(id, dados, usuario)
+                .map(transaction -> ResponseEntity.ok(new DadosDetalhamentoTransacaoDTO(transaction)))
                 .orElse(ResponseEntity.notFound().build());
     }
 }

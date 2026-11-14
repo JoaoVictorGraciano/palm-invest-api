@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -76,7 +77,9 @@ class AutenticacaoControllerTest extends IntegracaoTestBase {
 
         postLogin("joao@exemplo.com", SENHA_TESTE)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").isString());
+                .andExpect(jsonPath("$.token").isString())
+                // 2 horas por padrão (JWT_EXPIRATION_HOURS), em segundos
+                .andExpect(jsonPath("$.expiresIn").value(7200));
     }
 
     @Test
@@ -96,6 +99,25 @@ class AutenticacaoControllerTest extends IntegracaoTestBase {
         cadastrarUsuario("Joao", "joao@exemplo.com");
 
         postLogin("joao@exemplo.com", "SenhaErrada999")
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void meDevolveNomeEEmailDoDonoDoToken() throws Exception {
+        var token = novoUsuarioComToken("Joao", "joao@exemplo.com");
+        novoUsuarioComToken("Outro", "outro@exemplo.com"); // não pode vazar para a resposta de Joao
+
+        mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.nome").value("Joao"))
+                .andExpect(jsonPath("$.email").value("joao@exemplo.com"))
+                .andExpect(jsonPath("$.senha").doesNotExist());
+    }
+
+    @Test
+    void meSemTokenRetorna401() throws Exception {
+        mockMvc.perform(get("/auth/me"))
                 .andExpect(status().isUnauthorized());
     }
 
