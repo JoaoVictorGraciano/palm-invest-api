@@ -60,6 +60,12 @@ public abstract class IntegracaoTestBase {
     static void propriedadesDeTeste(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", () -> URL_BANCO_TESTE);
         registry.add("api.security.token.secret", () -> JWT_SECRET_TESTE);
+        // Provedores de cotação: nunca a rede real nem as chaves do ambiente (BRAPI_TOKEN, COINGECKO_API_KEY).
+        // Porta 1 recusa conexão; os testes que precisam dos provedores apontam para um servidor falso.
+        registry.add("api.cotacoes.brapi.url", () -> "http://127.0.0.1:1");
+        registry.add("api.cotacoes.brapi.token", () -> "");
+        registry.add("api.cotacoes.coingecko.url", () -> "http://127.0.0.1:1");
+        registry.add("api.cotacoes.coingecko.api-key", () -> "");
     }
 
     @BeforeEach
