@@ -41,7 +41,7 @@ class CachesDeMercadoTest {
 
     private static CotacaoProperties propriedades(Duration acoes, Duration cripto, Duration busca, Duration idCripto) {
         return new CotacaoProperties(
-                new CotacaoProperties.Provedor("http://127.0.0.1:1", ""),
+                new CotacaoProperties.Provedor("http://127.0.0.1:1", "", 2),
                 new CotacaoProperties.CoinGecko("http://127.0.0.1:1", ""),
                 Duration.ofSeconds(1), Duration.ofSeconds(1),
                 new CotacaoProperties.Cache(acoes, cripto, busca, idCripto));

@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -204,6 +205,54 @@ class QuoteControllerTest extends IntegracaoTestBase {
                 .andExpect(jsonPath("$.quotes[*].symbol").value(org.hamcrest.Matchers.contains("PETR4")))
                 .andExpect(jsonPath("$.failures[*].symbol").value(org.hamcrest.Matchers.contains("BTC", "ENA")))
                 .andExpect(jsonPath("$.failures[0].mensagem").value("CoinGecko respondeu com erro (HTTP 503)"));
+    }
+
+    // --- limite da Brapi (429) ---
+
+    @Test
+    void repeteQuandoABrapiRecusaPorLimiteEDepoisCota() throws Exception {
+        var chamadas = new AtomicInteger();
+        PROVEDORES.quando("/brapi/quote/PETR4", r -> chamadas.incrementAndGet() == 1
+                ? new Resposta(429, "{\"error\":true,\"message\":\"Too many requests\"}")
+                : new Resposta(200, cotacaoBrapi("PETR4", "38.25", HORARIO_BRAPI)));
+
+        cotar("PETR4")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quotes[0].price").value(38.25))
+                .andExpect(jsonPath("$.failures", hasSize(0)));
+        assertEquals(2, PROVEDORES.requisicoes("/brapi/quote/PETR4").size());
+    }
+
+    @Test
+    void desisteDepoisDeTresRecusasPorLimite() throws Exception {
+        PROVEDORES.quando("/brapi/quote/PETR4", 429, "{\"error\":true}");
+
+        cotar("PETR4,BTC")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failures[0].symbol").value("PETR4"))
+                .andExpect(jsonPath("$.failures[0].mensagem").value("Brapi recusou a consulta: limite de requisições atingido"));
+        assertEquals(3, PROVEDORES.requisicoes("/brapi/quote/PETR4").size());
+    }
+
+    @Test
+    void naoPassaDeDuasChamadasSimultaneasABrapi() throws Exception {
+        var emAndamento = new AtomicInteger();
+        var maximo = new AtomicInteger();
+        var simbolos = java.util.List.of("AAAA3", "BBBB3", "CCCC3", "DDDD3", "EEEE3", "FFFF3");
+        for (var simbolo : simbolos) {
+            PROVEDORES.quando("/brapi/quote/" + simbolo, r -> {
+                maximo.accumulateAndGet(emAndamento.incrementAndGet(), Math::max);
+                try {
+                    return Resposta.comAtraso(200, 200, cotacaoBrapi(simbolo, "10", HORARIO_BRAPI));
+                } finally {
+                    emAndamento.decrementAndGet();
+                }
+            });
+        }
+
+        cotar(String.join(",", simbolos)).andExpect(status().isOk()).andExpect(jsonPath("$.quotes", hasSize(6)));
+
+        assertTrue(maximo.get() <= 2, "no máximo 2 chamadas simultâneas à Brapi, mas houve " + maximo.get());
     }
 
     // --- cache ---

@@ -32,7 +32,7 @@ class ClientesCotacaoConfigTest {
         provedores.quando("/brapi/quote/PETR4", 200, cotacaoBrapi("PETR4", "38.25", "2026-11-17T17:30:00.000Z"));
         provedores.quando("/coingecko/search", 200, buscaCoinGecko());
 
-        new BrapiClient(config.brapiRestClient(RestClient.builder(), properties, consumo)).cotar("PETR4");
+        new BrapiClient(config.brapiRestClient(RestClient.builder(), properties, consumo), properties).cotar("PETR4");
         new CoinGeckoClient(config.coingeckoRestClient(RestClient.builder(), properties, consumo)).buscar("BTC");
 
         var brapi = provedores.requisicoes("/brapi/quote/PETR4").getFirst();
@@ -53,7 +53,7 @@ class ClientesCotacaoConfigTest {
         provedores.quando("/brapi/quote/list", 200, "{\"stocks\":[]}");
         provedores.quando("/coingecko/search", 200, buscaCoinGecko());
 
-        new BrapiClient(config.brapiRestClient(RestClient.builder(), properties, consumo)).buscar("PETR", null, 6);
+        new BrapiClient(config.brapiRestClient(RestClient.builder(), properties, consumo), properties).buscar("PETR", null, 6);
         new CoinGeckoClient(config.coingeckoRestClient(RestClient.builder(), properties, consumo)).buscar("BTC");
 
         var brapi = provedores.requisicoes("/brapi/quote/list").getFirst();
@@ -67,7 +67,7 @@ class ClientesCotacaoConfigTest {
 
     private CotacaoProperties propriedades(String token, String chave) {
         return new CotacaoProperties(
-                new CotacaoProperties.Provedor(provedores.url("/brapi"), token),
+                new CotacaoProperties.Provedor(provedores.url("/brapi"), token, 2),
                 new CotacaoProperties.CoinGecko(provedores.url("/coingecko"), chave),
                 Duration.ofSeconds(1), Duration.ofSeconds(2),
                 new CotacaoProperties.Cache(Duration.ofMinutes(30), Duration.ofMinutes(5), Duration.ofMinutes(10), Duration.ofHours(24)));

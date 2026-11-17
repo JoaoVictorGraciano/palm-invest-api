@@ -51,6 +51,7 @@ public class ClientesCotacaoConfig {
 
     private static JdkClientHttpRequestFactory fabricaComTimeouts(CotacaoProperties properties) {
         var httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(properties.timeoutConexao())
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();

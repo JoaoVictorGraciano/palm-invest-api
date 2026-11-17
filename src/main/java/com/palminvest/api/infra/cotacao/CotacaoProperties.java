@@ -18,9 +18,14 @@ public record CotacaoProperties(
     public record Cache(Duration cotacaoAcoes, Duration cotacaoCripto, Duration busca, Duration idCripto) {
     }
 
-    public record Provedor(String url, String token) {
+    // maxParalelas: quantas chamadas à Brapi podem estar em andamento ao mesmo tempo (ela recusa rajadas com 429)
+    public record Provedor(String url, String token, Integer maxParalelas) {
         public boolean temToken() {
             return token != null && !token.isBlank();
+        }
+
+        public int limiteDeParalelas() {
+            return maxParalelas == null || maxParalelas < 1 ? 2 : maxParalelas;
         }
     }
 
