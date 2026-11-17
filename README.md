@@ -30,6 +30,7 @@ Nenhum segredo fica no código ou em arquivo versionado. A API lê tudo do ambie
 | `CORS_ORIGINS` | não | `http://localhost:5173` | origens liberadas no navegador, separadas por vírgula |
 | `BRAPI_TOKEN` | não | — | token da [Brapi](https://brapi.dev) (busca e cotação da B3). Sem ele valem os limites anônimos, que só cotam alguns tickers de teste |
 | `COINGECKO_API_KEY` | não | — | chave do plano **Demo** da [CoinGecko](https://www.coingecko.com/en/api) (busca e cotação de cripto), enviada no header `x-cg-demo-api-key`. Sem ela vale o limite público |
+| `BRAPI_MAX_PARALELAS` | não | `2` | quantas chamadas à Brapi podem estar em andamento ao mesmo tempo. A Brapi recusa rajadas com `429`; a API também repete o `429` até 2 vezes, com espera curta |
 | `CACHE_COTACAO_ACOES` | não | `30m` | tempo em cache da cotação de ações, FIIs, ETFs e BDRs (o plano gratuito da Brapi já tem ~30 min de atraso) |
 | `CACHE_COTACAO_CRIPTO` | não | `5m` | tempo em cache da cotação de criptomoedas |
 | `CACHE_BUSCA` | não | `10m` | tempo em cache das sugestões da busca de ativos |
@@ -160,8 +161,8 @@ esses provedores direto do navegador.
 **Cotações** (até 50 símbolos, sempre em reais, na ordem pedida):
 - O provedor de cada símbolo vem da classe que o usuário registrou nas transações dele. Para um símbolo que ele ainda
   não tem, o formato de ticker da B3 (`PETR4`, `HGLG11`, `B3SA3`, `AAPL34`) vai para a Brapi e o resto para a CoinGecko.
-- Brapi: uma chamada por ativo. CoinGecko: todas as moedas numa única chamada; o id de cada símbolo é o da moeda de
-  maior valor de mercado.
+- Brapi: uma chamada por ativo, no máximo `BRAPI_MAX_PARALELAS` ao mesmo tempo, com até 2 repetições em `429`.
+  CoinGecko: todas as moedas numa única chamada; o id de cada símbolo é o da moeda de maior valor de mercado.
 - `updatedAt` é o horário informado pelo provedor.
 
 **Falhas:** um provedor fora do ar não derruba o outro: busca devolve o provedor em `failedProviders` e cotação devolve

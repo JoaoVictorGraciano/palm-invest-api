@@ -8,7 +8,7 @@ variáveis de ambiente e como rodar.
 
 - **Nunca** coloque senha, token, chave JWT ou credencial de banco no código, em `application*.properties`, em
   migração, em teste ou em commit. Tudo vem de variável de ambiente (`DB_USER`, `DB_PASSWORD`, `JWT_SECRET`,
-  `JWT_EXPIRATION_HOURS`, `CORS_ORIGINS`, `BRAPI_TOKEN`, `COINGECKO_API_KEY`, `CACHE_*`). Nos testes a chave JWT, o
+  `JWT_EXPIRATION_HOURS`, `CORS_ORIGINS`, `BRAPI_TOKEN`, `COINGECKO_API_KEY`, `BRAPI_MAX_PARALELAS`, `CACHE_*`). Nos testes a chave JWT, o
   token da Brapi e a chave da CoinGecko são gerados aleatoriamente em `IntegracaoTestBase`.
 - Não imprima valores de segredo em logs, comandos ou respostas; verifique só o formato (ex.: tamanho do Base64).
 - `BRAPI_TOKEN` e `COINGECKO_API_KEY` são opcionais (sem eles valem os limites gratuitos) e vão só em header, nunca na
@@ -44,7 +44,8 @@ variáveis de ambiente e como rodar.
   cotação em `AssetSearchService` e `QuoteService`. Falha de provedor é `ProvedorIndisponivelException` (mensagem
   curta, sem URL nem credencial); resultado parcial é a regra e `503` só quando nada pôde ser devolvido.
 - Toda chamada a provedor passa pelos caches de `CachesDeMercado` (tempos em `CACHE_*`); nunca guarde falha no
-  cache. Respeite a cota: Brapi é uma chamada por ativo, CoinGecko junta todas as moedas numa chamada só.
+  cache. Respeite a cota: Brapi é uma chamada por ativo, CoinGecko junta todas as moedas numa chamada só. A Brapi
+  recusa rajadas com `429`: não remova o limite de chamadas simultâneas nem a repetição do `BrapiClient`.
 - Comentários em português, no tom dos existentes; código em inglês onde já é inglês (entidade `Transaction`) e
   português onde já é português (`Usuario`, DTOs). Não misture dentro do mesmo arquivo.
 
