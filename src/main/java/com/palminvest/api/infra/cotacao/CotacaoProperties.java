@@ -11,8 +11,13 @@ public record CotacaoProperties(
         Provedor brapi,
         CoinGecko coingecko,
         Duration timeoutConexao,
-        Duration timeoutLeitura
+        Duration timeoutLeitura,
+        Cache cache
 ) {
+    // Quanto tempo cada resultado fica em memória antes de consultar o provedor de novo
+    public record Cache(Duration cotacaoAcoes, Duration cotacaoCripto, Duration busca, Duration idCripto) {
+    }
+
     public record Provedor(String url, String token) {
         public boolean temToken() {
             return token != null && !token.isBlank();

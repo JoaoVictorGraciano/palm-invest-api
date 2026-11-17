@@ -17,11 +17,12 @@ import java.util.concurrent.Executors;
 public class ClientesCotacaoConfig {
 
     @Bean
-    public RestClient brapiRestClient(RestClient.Builder builder, CotacaoProperties properties) {
+    public RestClient brapiRestClient(RestClient.Builder builder, CotacaoProperties properties, ConsumoDeProvedores consumo) {
         var brapi = properties.brapi();
         var cliente = builder.clone()
                 .baseUrl(brapi.url())
-                .requestFactory(fabricaComTimeouts(properties));
+                .requestFactory(fabricaComTimeouts(properties))
+                .requestInterceptor(consumo.interceptor(ProvedorExterno.BRAPI));
         if (brapi.temToken()) {
             cliente.defaultHeader("Authorization", "Bearer " + brapi.token());
         }
@@ -29,11 +30,12 @@ public class ClientesCotacaoConfig {
     }
 
     @Bean
-    public RestClient coingeckoRestClient(RestClient.Builder builder, CotacaoProperties properties) {
+    public RestClient coingeckoRestClient(RestClient.Builder builder, CotacaoProperties properties, ConsumoDeProvedores consumo) {
         var coingecko = properties.coingecko();
         var cliente = builder.clone()
                 .baseUrl(coingecko.url())
-                .requestFactory(fabricaComTimeouts(properties));
+                .requestFactory(fabricaComTimeouts(properties))
+                .requestInterceptor(consumo.interceptor(ProvedorExterno.COINGECKO));
         if (coingecko.temApiKey()) {
             // Chave do plano Demo da CoinGecko
             cliente.defaultHeader("x-cg-demo-api-key", coingecko.apiKey());

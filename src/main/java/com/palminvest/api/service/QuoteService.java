@@ -4,6 +4,7 @@ import com.palminvest.api.dto.DadosCotacaoDTO;
 import com.palminvest.api.dto.DadosCotacoesDTO;
 import com.palminvest.api.dto.DadosFalhaCotacaoDTO;
 import com.palminvest.api.infra.cotacao.BrapiClient;
+import com.palminvest.api.infra.cotacao.CachesDeMercado;
 import com.palminvest.api.infra.cotacao.CoinGeckoClient;
 import com.palminvest.api.infra.cotacao.ProvedorExterno;
 import com.palminvest.api.infra.cotacao.ProvedorIndisponivelException;
@@ -48,14 +49,17 @@ public class QuoteService {
     private final CoinGeckoClient coinGecko;
     private final CoinGeckoIdResolver ids;
     private final TransactionRepository transactions;
+    private final CachesDeMercado caches;
     private final ExecutorService executor;
 
     public QuoteService(BrapiClient brapi, CoinGeckoClient coinGecko, CoinGeckoIdResolver ids,
-                        TransactionRepository transactions, @Qualifier("cotacaoExecutor") ExecutorService executor) {
+                        TransactionRepository transactions, CachesDeMercado caches,
+                        @Qualifier("cotacaoExecutor") ExecutorService executor) {
         this.brapi = brapi;
         this.coinGecko = coinGecko;
         this.ids = ids;
         this.transactions = transactions;
+        this.caches = caches;
         this.executor = executor;
     }
 
@@ -112,7 +116,12 @@ public class QuoteService {
 
     private Resultado cotarUmaAcao(String simbolo) {
         try {
-            return brapi.cotar(simbolo)
+            var daBrapi = caches.cotacaoAcao(simbolo).orElseGet(() -> {
+                var nova = brapi.cotar(simbolo);
+                caches.guardarCotacaoAcao(simbolo, nova);
+                return nova;
+            });
+            return daBrapi
                     .<Resultado>map(cotacao -> cotacao.moeda() != null && !REAL.equalsIgnoreCase(cotacao.moeda())
                             ? Falha.naoEncontrada(simbolo, ProvedorExterno.BRAPI, "Cotação de " + simbolo + " não está em reais")
                             : new Obtida(new DadosCotacaoDTO(simbolo, cotacao.preco(), REAL, ProvedorExterno.BRAPI, cotacao.atualizadoEm())))
@@ -147,10 +156,17 @@ public class QuoteService {
             }
         });
 
-        // 2. preços de todas as moedas resolvidas numa única chamada
+        // 2. preços: os que estão no cache, e os demais numa única chamada com todas as moedas que faltam
         if (!idPorSimbolo.isEmpty()) {
             try {
-                var precos = coinGecko.precosEmReais(idPorSimbolo.values().stream().distinct().toList());
+                var idsPedidos = idPorSimbolo.values().stream().distinct().toList();
+                var precos = new HashMap<>(caches.precosCripto(idsPedidos));
+                var faltando = idsPedidos.stream().filter(id -> !precos.containsKey(id)).toList();
+                if (!faltando.isEmpty()) {
+                    var novos = coinGecko.precosEmReais(faltando);
+                    caches.guardarPrecosCripto(novos);
+                    precos.putAll(novos);
+                }
                 idPorSimbolo.forEach((simbolo, id) -> {
                     var preco = precos.get(id);
                     resultados.put(simbolo, preco == null

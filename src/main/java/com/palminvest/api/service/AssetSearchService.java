@@ -3,6 +3,7 @@ package com.palminvest.api.service;
 import com.palminvest.api.dto.DadosBuscaAtivosDTO;
 import com.palminvest.api.dto.DadosSugestaoAtivoDTO;
 import com.palminvest.api.infra.cotacao.BrapiClient;
+import com.palminvest.api.infra.cotacao.CachesDeMercado;
 import com.palminvest.api.infra.cotacao.CoinGeckoClient;
 import com.palminvest.api.infra.cotacao.ProvedorExterno;
 import com.palminvest.api.infra.cotacao.ProvedorIndisponivelException;
@@ -18,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
@@ -45,12 +47,14 @@ public class AssetSearchService {
 
     private final BrapiClient brapi;
     private final CoinGeckoClient coinGecko;
+    private final CachesDeMercado caches;
     private final ExecutorService executor;
 
-    public AssetSearchService(BrapiClient brapi, CoinGeckoClient coinGecko,
+    public AssetSearchService(BrapiClient brapi, CoinGeckoClient coinGecko, CachesDeMercado caches,
                               @Qualifier("cotacaoExecutor") ExecutorService executor) {
         this.brapi = brapi;
         this.coinGecko = coinGecko;
+        this.caches = caches;
         this.executor = executor;
     }
 
@@ -65,8 +69,9 @@ public class AssetSearchService {
         boolean querB3 = classe == null || classe != AssetClass.CRYPTO;
         boolean querCripto = classe == null || classe == AssetClass.CRYPTO;
 
-        var b3 = querB3 ? emParalelo(() -> buscarNaBrapi(termo, classe)) : null;
-        var cripto = querCripto ? emParalelo(() -> buscarCriptos(termo)) : null;
+        var b3 = querB3 ? emParalelo(() -> comCache(ProvedorExterno.BRAPI, termo + "|" + (classe == null ? "ALL" : classe),
+                () -> buscarNaBrapi(termo, classe))) : null;
+        var cripto = querCripto ? emParalelo(() -> comCache(ProvedorExterno.COINGECKO, termo, () -> buscarCriptos(termo))) : null;
 
         var sugestoes = new ArrayList<DadosSugestaoAtivoDTO>();
         var falhas = new ArrayList<ProvedorIndisponivelException>();
@@ -96,9 +101,13 @@ public class AssetSearchService {
     }
 
     List<DadosSugestaoAtivoDTO> buscarCriptos(String termo) {
+        var melhores = melhorMoedaPorSimbolo(coinGecko.buscar(termo));
+        // Cada busca já ensina o id de cada símbolo: cotar a moeda escolhida depois não gasta outra chamada
+        melhores.forEach((simbolo, moeda) -> caches.guardarIdCripto(simbolo, Optional.of(moeda.id())));
+
         // Maior valor de mercado primeiro; depois o casamento com o texto. Só então o corte,
         // para um símbolo exato de moeda pequena não ficar de fora.
-        var porValorDeMercado = melhorMoedaPorSimbolo(coinGecko.buscar(termo)).entrySet().stream()
+        var porValorDeMercado = melhores.entrySet().stream()
                 .sorted(Comparator.comparingInt(e -> ranking(e.getValue())))
                 .map(e -> new DadosSugestaoAtivoDTO(e.getKey(), e.getValue().name(), AssetClass.CRYPTO))
                 .toList();
@@ -180,6 +189,15 @@ public class AssetSearchService {
             case BDR -> "bdr";
             case CRYPTO -> throw new IllegalArgumentException("CRYPTO não é buscada na Brapi");
         };
+    }
+
+    // Resultado de um provedor para o termo, do cache se houver; falha do provedor não entra no cache
+    private List<DadosSugestaoAtivoDTO> comCache(ProvedorExterno provedor, String chave, Supplier<List<DadosSugestaoAtivoDTO>> consulta) {
+        return caches.busca(provedor, chave).orElseGet(() -> {
+            var sugestoes = consulta.get();
+            caches.guardarBusca(provedor, chave, sugestoes);
+            return sugestoes;
+        });
     }
 
     private <T> CompletableFuture<T> emParalelo(Supplier<T> tarefa) {
