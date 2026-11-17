@@ -5,8 +5,11 @@
 API REST da carteira de investimentos **Palm Invest**. Guarda usuários e suas transações de compra e venda
 (ações da B3 e criptomoedas); o front em `../palm-invest` deriva carteira, custo médio e histórico a partir delas.
 
-Stack: Java 21, Spring Boot 4, Spring Security + JWT (jjwt), Spring Data JPA, Flyway, PostgreSQL. Testes com JUnit 5,
-MockMvc e H2 em memória.
+Também busca ativos e cotações na Brapi e na CoinGecko, com cache em memória, para o front não chamar esses provedores
+direto do navegador.
+
+Stack: Java 21, Spring Boot 4, Spring Security + JWT (jjwt), Spring Data JPA, Flyway, PostgreSQL, RestClient e
+Caffeine. Testes com JUnit 5, MockMvc, H2 em memória e um servidor HTTP local no lugar dos provedores.
 
 ## Pré-requisitos
 
@@ -25,6 +28,15 @@ Nenhum segredo fica no código ou em arquivo versionado. A API lê tudo do ambie
 | `JWT_SECRET` | sim | — | chave HMAC do token, em **Base64**, com pelo menos 32 bytes (256 bits). A API não sobe sem ela ou com chave curta |
 | `JWT_EXPIRATION_HOURS` | não | `2` | validade do token |
 | `CORS_ORIGINS` | não | `http://localhost:5173` | origens liberadas no navegador, separadas por vírgula |
+| `BRAPI_TOKEN` | não | — | token da [Brapi](https://brapi.dev) (busca e cotação da B3). Sem ele valem os limites anônimos, que só cotam alguns tickers de teste |
+| `COINGECKO_API_KEY` | não | — | chave do plano **Demo** da [CoinGecko](https://www.coingecko.com/en/api) (busca e cotação de cripto), enviada no header `x-cg-demo-api-key`. Sem ela vale o limite público |
+| `CACHE_COTACAO_ACOES` | não | `30m` | tempo em cache da cotação de ações, FIIs, ETFs e BDRs (o plano gratuito da Brapi já tem ~30 min de atraso) |
+| `CACHE_COTACAO_CRIPTO` | não | `5m` | tempo em cache da cotação de criptomoedas |
+| `CACHE_BUSCA` | não | `10m` | tempo em cache das sugestões da busca de ativos |
+| `CACHE_ID_CRIPTO` | não | `24h` | tempo em cache do mapa símbolo → id da CoinGecko |
+
+Os tempos de cache aceitam o formato de duração do Spring (`90s`, `5m`, `2h`). Token e chave vão só em header, nunca
+na URL, e nunca são registrados em log.
 
 Gerando uma chave:
 
@@ -65,9 +77,10 @@ ele só confere se as entidades batem com o banco e falha na subida se não bate
 .\mvnw.cmd test
 ```
 
-Rodam sem PostgreSQL e sem variáveis de ambiente: o perfil `test` usa H2 em memória (schema criado pelo Flyway) e uma
-`JWT_SECRET` aleatória gerada a cada execução. A classe base `IntegracaoTestBase` recusa limpar o banco se a conexão
-não for `jdbc:h2:mem:`.
+Rodam sem PostgreSQL, sem internet e sem variáveis de ambiente: o perfil `test` usa H2 em memória (schema criado pelo
+Flyway) e uma `JWT_SECRET` aleatória gerada a cada execução. A Brapi e a CoinGecko são simuladas por um servidor HTTP
+local (`ProvedoresFalsos`), com token e chave aleatórios; `BRAPI_TOKEN` e `COINGECKO_API_KEY` do ambiente nunca são
+usados nos testes. A classe base `IntegracaoTestBase` recusa limpar o banco se a conexão não for `jdbc:h2:mem:`.
 
 ## Rotas
 
@@ -127,16 +140,54 @@ instante) como ele ficaria após a operação e recusa com `422` qualquer criaç
 quantidade em carteira negativa em algum ponto. Ex.: vender sem ter comprado, vender antes da data da compra, reduzir
 ou excluir uma compra que sustenta uma venda posterior.
 
+### Busca de ativos e cotações
+
+A API consulta a Brapi (ações, FIIs, ETFs e BDRs da B3) e a CoinGecko (criptomoedas) pelo front, que não chama mais
+esses provedores direto do navegador.
+
+| Método | Rota | Resposta |
+|---|---|---|
+| `GET` | `/api/assets/search?q=petr&class=ALL` | `200 {suggestions: [{symbol, name, assetClass}], failedProviders: ["brapi" \| "coingecko"]}` |
+| `GET` | `/api/quotes?symbols=PETR4,HGLG11,BTC,ENA` | `200 {quotes: [{symbol, price, currency, provider, updatedAt}], failures: [{symbol, provider, mensagem}]}` |
+
+**Busca** (`q` de 2 a 50 caracteres; `class` = `ALL`, `STOCK`, `FII`, `ETF`, `BDR` ou `CRYPTO`, padrão `ALL`):
+- `ALL` consulta os dois provedores; `CRYPTO` só a CoinGecko; as demais só a Brapi, devolvendo apenas a classe pedida.
+- A classe dos ativos da Brapi vem de `type`/`subType` (`stock`/`unit` → STOCK, `bdr` → BDR, `fund`+`etf` → ETF, demais
+  fundos → FII). Na CoinGecko fica uma moeda por símbolo: a de maior valor de mercado.
+- Ordem: símbolo igual ao texto, depois símbolo ou nome começando com o texto, depois o resto; empates mantêm a ordem
+  do provedor. No máximo 6 sugestões por provedor.
+
+**Cotações** (até 50 símbolos, sempre em reais, na ordem pedida):
+- O provedor de cada símbolo vem da classe que o usuário registrou nas transações dele. Para um símbolo que ele ainda
+  não tem, o formato de ticker da B3 (`PETR4`, `HGLG11`, `B3SA3`, `AAPL34`) vai para a Brapi e o resto para a CoinGecko.
+- Brapi: uma chamada por ativo. CoinGecko: todas as moedas numa única chamada; o id de cada símbolo é o da moeda de
+  maior valor de mercado.
+- `updatedAt` é o horário informado pelo provedor.
+
+**Falhas:** um provedor fora do ar não derruba o outro: busca devolve o provedor em `failedProviders` e cotação devolve
+os símbolos dele em `failures`. Símbolo inexistente também vai em `failures`, com `200`. Só quando todos os provedores
+consultados estão indisponíveis e nada pôde ser devolvido a resposta é `503 {"mensagem"}`.
+
+**Cache em memória**, compartilhado entre todos os usuários (tempos nas variáveis `CACHE_*`): cotação de ações 30 min,
+cripto 5 min (só as moedas que faltam são pedidas, numa única chamada), buscas 10 min e símbolo → id da CoinGecko
+24 h (alimentado também pelas buscas de cripto). Falhas nunca ficam no cache. Cada chamada real a um provedor é
+registrada em log com método, caminho, status, tempo e o total por provedor desde a subida, para acompanhar a cota:
+
+```
+Chamada à Brapi nº 12: GET /api/quote/PETR4 -> HTTP 200 em 284 ms | total desde a subida: Brapi 12, CoinGecko 4
+```
+
 ### Erros
 
 | Status | Quando | Corpo |
 |---|---|---|
-| `400` | validação, JSON inválido, enum fora dos valores, tipo errado no path, parâmetro ausente | `[{"campo", "mensagem"}]` ou `{"mensagem"}` |
+| `400` | validação, JSON inválido, enum fora dos valores, tipo errado no path, parâmetro ausente ou inválido | `[{"campo", "mensagem"}]` ou `{"mensagem"}` |
 | `401` | sem token, token inválido/expirado, login errado | `{"mensagem"}` (vazio quando é o filtro que barra) |
 | `404` | recurso inexistente ou de outro usuário, rota inexistente | `{"mensagem"}` ou vazio |
 | `405` | método não suportado | `{"mensagem"}` |
 | `409` | e-mail já cadastrado | `{"mensagem"}` |
 | `422` | regra de saldo violada | `{"mensagem"}` |
+| `503` | Brapi e CoinGecko indisponíveis e nada a devolver na busca ou na cotação | `{"mensagem"}` |
 | `500` | falha inesperada; o detalhe fica só no log | `{"mensagem": "Erro interno no servidor"}` |
 
 ## CORS
