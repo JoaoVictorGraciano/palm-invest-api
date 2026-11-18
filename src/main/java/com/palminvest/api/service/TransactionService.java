@@ -1,6 +1,7 @@
 package com.palminvest.api.service;
 
 import com.palminvest.api.dto.DadosCadastroTransacaoDTO;
+import com.palminvest.api.dto.DadosDetalhamentoTransacaoDTO;
 import com.palminvest.api.dto.DadosExclusaoPorAtivoDTO;
 import com.palminvest.api.infra.RegraDeNegocioException;
 import com.palminvest.api.model.Transaction;
@@ -15,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -33,21 +33,28 @@ public class TransactionService {
     @Autowired
     private ProventoRepository proventos;
 
+    // Transações do usuário (mais recente primeiro), com o lucro realizado de cada venda
     @Transactional(readOnly = true)
-    public List<Transaction> listar(Usuario usuario) {
-        return repository.findAllByUsuarioOrderByTransactionDateDescIdDesc(usuario);
+    public List<DadosDetalhamentoTransacaoDTO> listar(Usuario usuario) {
+        var transacoes = repository.findAllByUsuarioOrderByTransactionDateDescIdDesc(usuario);
+        var lucros = LinhaDoTempo.lucroPorVenda(transacoes);
+        return transacoes.stream().map(t -> new DadosDetalhamentoTransacaoDTO(t, lucros.get(t.getId()))).toList();
     }
 
     @Transactional
-    public Transaction criar(DadosCadastroTransacaoDTO dados, Usuario usuario) {
+    public DadosDetalhamentoTransacaoDTO criar(DadosCadastroTransacaoDTO dados, Usuario usuario) {
         var nova = new Transaction(dados, usuario);
         validarSaldo(usuario, nova.getAssetSymbol(), null, nova);
-        return repository.save(nova);
+        return detalhar(repository.save(nova), usuario);
     }
 
     // Vazio se a transação não existe ou é de outro usuário (o controller devolve 404)
     @Transactional
-    public Optional<Transaction> atualizar(Long id, DadosCadastroTransacaoDTO dados, Usuario usuario) {
+    public Optional<DadosDetalhamentoTransacaoDTO> atualizar(Long id, DadosCadastroTransacaoDTO dados, Usuario usuario) {
+        return atualizarEntidade(id, dados, usuario).map(transacao -> detalhar(transacao, usuario));
+    }
+
+    private Optional<Transaction> atualizarEntidade(Long id, DadosCadastroTransacaoDTO dados, Usuario usuario) {
         return repository.findByIdAndUsuario(id, usuario).map(existente -> {
             var simboloAntigo = existente.getAssetSymbol();
             var editada = copiaComDados(existente, dados, usuario);
@@ -104,13 +111,9 @@ public class TransactionService {
             linhaDoTempo.add(adicional);
         }
 
-        // Mesma data: compra antes da venda (permite comprar e vender no mesmo instante); id desempata o resto
-        linhaDoTempo.sort(Comparator.comparing(Transaction::getTransactionDate)
-                .thenComparing(t -> t.getType() == TransactionType.SELL ? 1 : 0)
-                .thenComparing(Transaction::getId, Comparator.nullsLast(Comparator.naturalOrder())));
-
+        // Mesma ordem do cálculo de lucro: data, compra antes da venda no mesmo instante, id
         var saldo = BigDecimal.ZERO;
-        for (var t : linhaDoTempo) {
+        for (var t : LinhaDoTempo.ordenar(linhaDoTempo)) {
             if (t.getType() == TransactionType.SELL) {
                 if (saldo.compareTo(t.getQuantity()) < 0) {
                     throw new RegraDeNegocioException("Saldo insuficiente de %s em %s: disponível %s, venda de %s".formatted(
@@ -121,6 +124,12 @@ public class TransactionService {
                 saldo = saldo.add(t.getQuantity());
             }
         }
+    }
+
+    // DTO de uma transação com o lucro realizado, recalculado sobre o histórico do ativo já com ela gravada
+    private DadosDetalhamentoTransacaoDTO detalhar(Transaction transacao, Usuario usuario) {
+        var lucros = LinhaDoTempo.lucroPorVenda(repository.findAllByUsuarioAndAssetSymbol(usuario, transacao.getAssetSymbol()));
+        return new DadosDetalhamentoTransacaoDTO(transacao, lucros.get(transacao.getId()));
     }
 
     // Versão em memória da transação com os dados novos, mantendo o id para o desempate da ordenação

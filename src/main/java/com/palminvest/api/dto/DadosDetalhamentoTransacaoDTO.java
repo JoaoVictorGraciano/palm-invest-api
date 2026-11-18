@@ -7,7 +7,8 @@ import com.palminvest.api.model.TransactionType;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-// Formato da transação devolvida para o Front (nunca expõe a entidade direto)
+// Formato da transação devolvida para o Front (nunca expõe a entidade direto).
+// lucroRealizado: só nas vendas (positivo = lucro, negativo = prejuízo, pelo custo médio); null nas compras.
 public record DadosDetalhamentoTransacaoDTO(
         Long id,
         TransactionType type,
@@ -18,11 +19,12 @@ public record DadosDetalhamentoTransacaoDTO(
         LocalDateTime transactionDate,
         String broker,
         BigDecimal fee,
-        String observation
+        String observation,
+        BigDecimal lucroRealizado
 ) {
-    public DadosDetalhamentoTransacaoDTO(Transaction transaction) {
+    public DadosDetalhamentoTransacaoDTO(Transaction transaction, BigDecimal lucroRealizado) {
         this(transaction.getId(), transaction.getType(), transaction.getAssetSymbol(), transaction.getAssetClass(),
                 transaction.getQuantity(), transaction.getPrice(), transaction.getTransactionDate(),
-                transaction.getBroker(), transaction.getFee(), transaction.getObservation());
+                transaction.getBroker(), transaction.getFee(), transaction.getObservation(), lucroRealizado);
     }
 }
