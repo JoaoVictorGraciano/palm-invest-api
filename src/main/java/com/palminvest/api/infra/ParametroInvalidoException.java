@@ -1,6 +1,7 @@
 package com.palminvest.api.infra;
 
-// Query param presente mas inválido (ex: busca com 1 caractere): 400 no mesmo formato da validação do corpo
+// Parâmetro ou campo presente mas fora de uma regra que o Bean Validation não expressa (ex: busca com 1 caractere,
+// IR maior que o valor bruto): 400 no mesmo formato da validação do corpo
 public class ParametroInvalidoException extends RuntimeException {
 
     private final String campo;
