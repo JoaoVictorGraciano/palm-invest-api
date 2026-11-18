@@ -2,6 +2,7 @@ package com.palminvest.api.controller;
 
 import com.palminvest.api.dto.DadosCadastroProventoDTO;
 import com.palminvest.api.dto.DadosDetalhamentoProventoDTO;
+import com.palminvest.api.dto.DadosResumoProventosDTO;
 import com.palminvest.api.infra.ParametroInvalidoException;
 import com.palminvest.api.model.Usuario;
 import com.palminvest.api.service.ProventoService;
@@ -43,6 +44,13 @@ public class ProventoController {
         validarAno(ano);
         var simbolo = assetSymbol == null || assetSymbol.isBlank() ? null : assetSymbol.trim().toUpperCase(Locale.ROOT);
         return service.listar(usuario, ano, simbolo).stream().map(DadosDetalhamentoProventoDTO::new).toList();
+    }
+
+    // GET /api/proventos/resumo?ano=2025: total líquido do ano, por mês, por ativo e por tipo
+    @GetMapping("/resumo")
+    public DadosResumoProventosDTO resumo(@RequestParam int ano, @AuthenticationPrincipal Usuario usuario) {
+        validarAno(ano);
+        return service.resumir(usuario, ano);
     }
 
     @PostMapping
