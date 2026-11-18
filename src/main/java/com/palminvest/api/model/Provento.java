@@ -69,8 +69,10 @@ public class Provento {
         this.assetClass = assetClass;
         this.tipo = tipo;
         this.dataPagamento = dataPagamento;
-        this.valorBruto = valorBruto;
-        this.irRetido = irRetido;
+        // Sempre com 2 casas, como a coluna numeric(19,2): a resposta do POST/PUT sai igual à do GET.
+        // Os valores já chegam validados com no máximo 2 casas, então não há arredondamento.
+        this.valorBruto = valorBruto.setScale(2);
+        this.irRetido = irRetido.setScale(2);
         this.observacao = observacao;
     }
 

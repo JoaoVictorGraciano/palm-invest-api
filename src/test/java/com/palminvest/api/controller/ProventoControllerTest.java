@@ -42,7 +42,7 @@ class ProventoControllerTest extends IntegracaoTestBase {
 
     @Test
     void criaListaEditaEApagaUmProvento() throws Exception {
-        var resposta = registrar(tokenA, provento(" petr4 ", "DIVIDENDO", "2025-03-15", "100.00", "0"))
+        var resposta = registrar(tokenA, provento(" petr4 ", "DIVIDENDO", "2025-03-15", "100", "0"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNumber())
                 .andExpect(jsonPath("$.assetSymbol").value("PETR4"))
@@ -55,7 +55,12 @@ class ProventoControllerTest extends IntegracaoTestBase {
                 .andReturn().getResponse().getContentAsString();
         long id = jsonMapper.readTree(resposta).get("id").asLong();
 
-        listar(tokenA, "").andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+        // Valores sempre com 2 casas, na resposta do POST e na do GET
+        assertTrue(resposta.contains("\"valorBruto\":100.00") && resposta.contains("\"irRetido\":0.00")
+                && resposta.contains("\"valorLiquido\":100.00"), resposta);
+        var lista = listar(tokenA, "").andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)))
+                .andReturn().getResponse().getContentAsString();
+        assertTrue(lista.contains("\"valorBruto\":100.00"), lista);
 
         // JCP com IR retido: líquido = bruto - IR
         var json = editar(tokenA, id, provento("PETR4", "JCP", "2025-03-20", "50.00", "7.50"))
