@@ -2,8 +2,9 @@
 
 [![CI](https://github.com/JoaoVictorGraciano/palm-invest-api/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/JoaoVictorGraciano/palm-invest-api/actions/workflows/ci.yml)
 
-API REST da carteira de investimentos **Palm Invest**. Guarda usuários e suas transações de compra e venda
-(ações da B3 e criptomoedas); o front em `../palm-invest` deriva carteira, custo médio e histórico a partir delas.
+API REST da carteira de investimentos **Palm Invest**. Guarda usuários, suas transações de compra e venda
+(ações, FIIs, ETFs e BDRs da B3 e criptomoedas) e os proventos recebidos; o front em `../palm-invest` deriva carteira,
+custo médio e histórico a partir delas.
 
 Também busca ativos e cotações na Brapi e na CoinGecko, com cache em memória, para o front não chamar esses provedores
 direto do navegador.
@@ -107,7 +108,7 @@ Cada usuário só enxerga as próprias transações. Uma transação de outro us
 | `POST` | `/api/transactions` | cria; o dono vem do token e o `id` é gerado pelo banco |
 | `PUT` | `/api/transactions/{id}` | substitui todos os campos |
 | `DELETE` | `/api/transactions/{id}` | apaga uma transação |
-| `DELETE` | `/api/transactions?assetSymbol=PETR4` | apaga **todas** as transações do ativo numa única transação de banco; `200 {assetSymbol, excluidas}` ou `404` |
+| `DELETE` | `/api/transactions?assetSymbol=PETR4` | apaga **todas** as transações e **todos os proventos** do ativo numa única transação de banco; `200 {assetSymbol, excluidas, proventosExcluidos}` ou `404` se não havia nenhum dos dois |
 
 Corpo do `POST`/`PUT` (sem `id`):
 
@@ -140,6 +141,63 @@ Corpo do `POST`/`PUT` (sem `id`):
 instante) como ele ficaria após a operação e recusa com `422` qualquer criação, edição ou exclusão que deixe a
 quantidade em carteira negativa em algum ponto. Ex.: vender sem ter comprado, vender antes da data da compra, reduzir
 ou excluir uma compra que sustenta uma venda posterior.
+
+### Proventos (`/api/proventos`)
+
+Dividendos, JCP, rendimentos de FII e amortizações recebidos. Como nas transações, cada usuário só enxerga os próprios
+proventos e um provento de outro usuário responde `404`.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/proventos?ano=2025&assetSymbol=PETR4` | lista do usuário, do pagamento mais recente para o mais antigo (id desempata o mesmo dia); `ano` e `assetSymbol` são opcionais |
+| `POST` | `/api/proventos` | registra; `201` com o provento |
+| `PUT` | `/api/proventos/{id}` | substitui todos os campos |
+| `DELETE` | `/api/proventos/{id}` | apaga um provento; `204` |
+| `GET` | `/api/proventos/resumo?ano=2025` | totais líquidos do ano (ver abaixo); `ano` obrigatório |
+
+Corpo do `POST`/`PUT` (sem `id` e sem `assetClass`):
+
+```json
+{
+  "assetSymbol": "PETR4",
+  "tipo": "JCP",
+  "dataPagamento": "2025-03-20",
+  "valorBruto": 50.00,
+  "irRetido": 7.50,
+  "observacao": "JCP 1T25"
+}
+```
+
+| Campo | Regras |
+|---|---|
+| `assetSymbol` | obrigatório, até 20 caracteres; normalizado para maiúsculas sem espaços |
+| `tipo` | `DIVIDENDO`, `JCP`, `RENDIMENTO` ou `AMORTIZACAO` |
+| `dataPagamento` | data (`AAAA-MM-DD`), não pode ser futura |
+| `valorBruto` | maior que zero, até 2 casas (`numeric(19,2)`) |
+| `irRetido` | opcional (padrão `0`), zero ou mais, até 2 casas e no máximo igual ao `valorBruto` |
+| `observacao` | opcional, até 255 |
+
+Resposta: `{id, assetSymbol, assetClass, tipo, dataPagamento, valorBruto, irRetido, valorLiquido, observacao}`.
+O `valorLiquido` (`valorBruto - irRetido`) é calculado pela API, não é gravado.
+
+**Regra de carteira:** só é possível registrar (ou editar para) um provento de um ativo em que o usuário tenha alguma
+transação com data até o fim do dia do pagamento; senão a resposta é `422 {"mensagem"}`. A `assetClass` do provento é
+copiada da transação mais recente do ativo até essa data, e não vem do corpo.
+
+**Resumo** (`GET /api/proventos/resumo?ano=2025`), sempre em valores líquidos:
+
+```json
+{
+  "ano": 2025,
+  "totalBruto": 380.00, "totalIrRetido": 30.00, "totalLiquido": 350.00,
+  "porMes":   [{"mes": 1, "totalLiquido": 100.00}, {"mes": 2, "totalLiquido": 0.00}, "... os 12 meses"],
+  "porAtivo": [{"assetSymbol": "PETR4", "assetClass": "STOCK", "totalLiquido": 270.00}, "... do maior para o menor"],
+  "porTipo":  [{"tipo": "DIVIDENDO", "totalLiquido": 100.00}, "... os 4 tipos, com zero quando não houve"]
+}
+```
+
+Excluir o ativo inteiro (`DELETE /api/transactions?assetSymbol=X`) apaga também os proventos dele. Excluir uma
+transação isolada não apaga proventos já registrados.
 
 ### Busca de ativos e cotações
 
@@ -187,7 +245,7 @@ Chamada à Brapi nº 12: GET /api/quote/PETR4 -> HTTP 200 em 284 ms | total desd
 | `404` | recurso inexistente ou de outro usuário, rota inexistente | `{"mensagem"}` ou vazio |
 | `405` | método não suportado | `{"mensagem"}` |
 | `409` | e-mail já cadastrado | `{"mensagem"}` |
-| `422` | regra de saldo violada | `{"mensagem"}` |
+| `422` | regra de saldo violada; provento de ativo que o usuário não tinha na data do pagamento | `{"mensagem"}` |
 | `503` | Brapi e CoinGecko indisponíveis e nada a devolver na busca ou na cotação | `{"mensagem"}` |
 | `500` | falha inesperada; o detalhe fica só no log | `{"mensagem": "Erro interno no servidor"}` |
 
