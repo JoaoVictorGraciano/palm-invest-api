@@ -1,6 +1,8 @@
 package com.palminvest.api.service;
 
+import com.palminvest.api.dto.DadosLimiteIsencaoDTO;
 import com.palminvest.api.dto.DadosResultadosAnoDTO;
+import com.palminvest.api.model.AssetClass;
 import com.palminvest.api.model.Transaction;
 import com.palminvest.api.model.TransactionType;
 import com.palminvest.api.model.Usuario;
@@ -11,12 +13,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -75,6 +79,27 @@ public class ResultadoService {
                         porGrupo(apuracao.saldoEm(YearMonth.of(ano - 1, 12))),
                         porGrupo(apuracao.saldoEm(YearMonth.of(ano, 12)))),
                 alertas);
+    }
+
+    // Quanto já foi vendido no mês em ações e em cripto e quanto ainda cabe no limite de isenção de cada um
+    @Transactional(readOnly = true)
+    public DadosLimiteIsencaoDTO limiteDeIsencao(Usuario usuario, YearMonth mes) {
+        var vendidoPorClasse = new EnumMap<AssetClass, BigDecimal>(AssetClass.class);
+        for (var t : transactions.findAllByUsuarioOrderByTransactionDateDescIdDesc(usuario)) {
+            if (t.getType() == TransactionType.SELL && YearMonth.from(t.getTransactionDate()).equals(mes)) {
+                // Mesmo valor de venda da apuração: quantidade × preço, sem descontar a taxa
+                vendidoPorClasse.merge(t.getAssetClass(), t.getQuantity().multiply(t.getPrice()), BigDecimal::add);
+            }
+        }
+        return new DadosLimiteIsencaoDTO(mes,
+                limite(RegrasDeImpostoDeRenda.LIMITE_ISENCAO_ACOES, vendidoPorClasse.getOrDefault(AssetClass.STOCK, ZERO)),
+                limite(RegrasDeImpostoDeRenda.LIMITE_ISENCAO_CRIPTO, vendidoPorClasse.getOrDefault(AssetClass.CRYPTO, ZERO)));
+    }
+
+    private static DadosLimiteIsencaoDTO.Limite limite(BigDecimal limite, BigDecimal vendido) {
+        var vendidoEmReais = vendido.setScale(2, RoundingMode.HALF_UP);
+        var disponivel = limite.subtract(vendidoEmReais).max(ZERO);
+        return new DadosLimiteIsencaoDTO.Limite(limite, vendidoEmReais, disponivel, vendidoEmReais.compareTo(limite) <= 0);
     }
 
     // Um DARF por código no mês (6015 junta ações, ETF, BDR e FII), só quando há imposto
