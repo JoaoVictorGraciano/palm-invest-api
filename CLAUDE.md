@@ -8,8 +8,12 @@ variáveis de ambiente e como rodar.
 
 - **Nunca** coloque senha, token, chave JWT ou credencial de banco no código, em `application*.properties`, em
   migração, em teste ou em commit. Tudo vem de variável de ambiente (`DB_USER`, `DB_PASSWORD`, `JWT_SECRET`,
-  `JWT_EXPIRATION_HOURS`, `CORS_ORIGINS`). Nos testes a chave é gerada aleatoriamente em `IntegracaoTestBase`.
+  `JWT_EXPIRATION_HOURS`, `CORS_ORIGINS`, `BRAPI_TOKEN`, `COINGECKO_API_KEY`, `BRAPI_MAX_PARALELAS`, `CACHE_*`). Nos testes a chave JWT, o
+  token da Brapi e a chave da CoinGecko são gerados aleatoriamente em `IntegracaoTestBase`.
 - Não imprima valores de segredo em logs, comandos ou respostas; verifique só o formato (ex.: tamanho do Base64).
+- `BRAPI_TOKEN` e `COINGECKO_API_KEY` são opcionais (sem eles valem os limites gratuitos) e vão só em header, nunca na
+  URL. Não logue headers dos clientes HTTP; o `ConsumoDeProvedores` já registra cada chamada sem eles e mascara as
+  credenciais. Não reescreva `toString` de `CotacaoProperties` de forma que exponha token ou chave.
 - Rotas novas são protegidas por padrão (`anyRequest().authenticated()`); liberar uma rota é decisão explícita em
   `SecurityConfigurations`.
 - Recurso de outro usuário responde `404`, nunca `403`, para não revelar que existe. Toda consulta de transação filtra
@@ -35,14 +39,23 @@ variáveis de ambiente e como rodar.
 - Erros passam pelo `TratadorDeErros`: validação `400 [{campo, mensagem}]`, conflito `409`, regra de negócio
   `422` (`RegraDeNegocioException`), inesperado `500` genérico com detalhe só no log. Mantenha o formato
   `{"mensagem"}`, que o front já lê.
-- Valores de enum (`BUY/SELL`, `STOCK/CRYPTO`) são os mesmos do front; não traduza nem aceite sinônimos.
+- Valores de enum (`BUY/SELL`, `STOCK/FII/ETF/BDR/CRYPTO`) são os mesmos do front; não traduza nem aceite sinônimos.
+- Provedores de mercado (Brapi, CoinGecko): clientes em `infra/cotacao` (`RestClient` com timeouts); regras de busca e
+  cotação em `AssetSearchService` e `QuoteService`. Falha de provedor é `ProvedorIndisponivelException` (mensagem
+  curta, sem URL nem credencial); resultado parcial é a regra e `503` só quando nada pôde ser devolvido.
+- Toda chamada a provedor passa pelos caches de `CachesDeMercado` (tempos em `CACHE_*`); nunca guarde falha no
+  cache. Respeite a cota: Brapi é uma chamada por ativo, CoinGecko junta todas as moedas numa chamada só. A Brapi
+  recusa rajadas com `429`: não remova o limite de chamadas simultâneas nem a repetição do `BrapiClient`.
 - Comentários em português, no tom dos existentes; código em inglês onde já é inglês (entidade `Transaction`) e
   português onde já é português (`Usuario`, DTOs). Não misture dentro do mesmo arquivo.
 
 ## Testes
 
-- `.\mvnw.cmd test` precisa passar sem PostgreSQL e sem variáveis de ambiente. Todo teste de integração estende
-  `IntegracaoTestBase` (H2, MockMvc, helpers de cadastro/login/transação).
+- `.\mvnw.cmd test` precisa passar sem PostgreSQL, sem internet e sem variáveis de ambiente (o CI roda sem
+  segredos). Todo teste de integração estende `IntegracaoTestBase` (H2, MockMvc, helpers de cadastro/login/transação).
+- Testes nunca chamam a Brapi ou a CoinGecko reais: use o servidor local `ProvedoresFalsos` (`PROVEDORES.quando(...)`
+  e `PROVEDORES.requisicoes(...)`) com as respostas de `RespostasDeMercado`. Caches e rotas falsas são limpos antes
+  de cada teste.
 - Toda regra nova vem com teste de integração que exercita a rota, inclusive o caso de outro usuário.
 - Se um teste falhar, pare e mostre a saída; não comente, não apague e não afrouxe a asserção.
 

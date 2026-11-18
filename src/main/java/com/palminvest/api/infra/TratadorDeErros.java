@@ -1,5 +1,7 @@
 package com.palminvest.api.infra;
 
+import com.palminvest.api.infra.cotacao.ProvedorIndisponivelException;
+import com.palminvest.api.infra.cotacao.ProvedoresIndisponiveisException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -56,13 +58,29 @@ public class TratadorDeErros {
     // Path ou query param com tipo errado (ex: /api/transactions/abc): 400 no mesmo formato da validação
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<List<DadosErroValidacao>> tratarTipoInvalido(MethodArgumentTypeMismatchException ex) {
-        return ResponseEntity.badRequest().body(List.of(new DadosErroValidacao(ex.getName(), "valor inválido")));
+        var mensagem = ex.getRequiredType() != null && ex.getRequiredType().isEnum()
+                ? "valor inválido; use " + String.join(", ", valoresDoEnum(ex.getRequiredType()))
+                : "valor inválido";
+        return ResponseEntity.badRequest().body(List.of(new DadosErroValidacao(ex.getName(), mensagem)));
     }
 
     // Query param obrigatório ausente
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<List<DadosErroValidacao>> tratarParametroAusente(MissingServletRequestParameterException ex) {
         return ResponseEntity.badRequest().body(List.of(new DadosErroValidacao(ex.getParameterName(), "parâmetro obrigatório")));
+    }
+
+    // Query param presente mas fora da regra (ex: busca com 1 caractere, símbolo inválido)
+    @ExceptionHandler(ParametroInvalidoException.class)
+    public ResponseEntity<List<DadosErroValidacao>> tratarParametroInvalido(ParametroInvalidoException ex) {
+        return ResponseEntity.badRequest().body(List.of(new DadosErroValidacao(ex.campo(), ex.getMessage())));
+    }
+
+    // Provedores de mercado (Brapi, CoinGecko) fora do ar e nada a devolver: 503, com mensagem sem URL nem chave
+    @ExceptionHandler({ProvedoresIndisponiveisException.class, ProvedorIndisponivelException.class})
+    public ResponseEntity<DadosErro> tratarProvedorIndisponivel(RuntimeException ex) {
+        log.warn("Provedor de mercado indisponível: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new DadosErro(ex.getMessage()));
     }
 
     // Login com e-mail ou senha errados: a exceção nasce dentro do controller, então precisa

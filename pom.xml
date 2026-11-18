@@ -42,6 +42,16 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
+        <!-- RestClient para os provedores de cotação (Brapi e CoinGecko) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-restclient</artifactId>
+        </dependency>
+        <!-- Cache em memória das cotações e buscas, compartilhado entre usuários -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
 
         <!-- 🔐 INÍCIO DAS DEPENDÊNCIAS DE SEGURANÇA E LOGIN 🔐 -->
         <!-- Spring Security (Para proteger as rotas e criptografar senha) -->
