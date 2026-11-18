@@ -14,7 +14,6 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Locale;
 
 // Toda rota usa o usuário do token (@AuthenticationPrincipal): ninguém enxerga transação de outra pessoa.
 // As regras (saldo de venda) ficam no TransactionService; aqui só HTTP.
@@ -47,19 +46,18 @@ public class TransactionController {
                 : ResponseEntity.notFound().build();
     }
 
-    // Rota DELETE por ativo: apaga todas as transações do símbolo do usuário logado de uma vez
-    // (404 se ele não tem nenhuma; 400 se o parâmetro vier ausente ou em branco)
+    // Rota DELETE por ativo: apaga todas as transações e todos os proventos do símbolo do usuário logado de uma vez
+    // (404 se ele não tem nenhum dos dois; 400 se o parâmetro vier ausente ou em branco)
     @DeleteMapping
     public ResponseEntity<DadosExclusaoPorAtivoDTO> deletarPorAtivo(@RequestParam String assetSymbol,
                                                                     @AuthenticationPrincipal Usuario usuario) throws MissingServletRequestParameterException {
         if (assetSymbol.isBlank()) {
             throw new MissingServletRequestParameterException("assetSymbol", "String");
         }
-        var simbolo = assetSymbol.trim().toUpperCase(Locale.ROOT);
-        long excluidas = service.excluirPorSimbolo(simbolo, usuario);
-        return excluidas == 0
+        var resultado = service.excluirPorSimbolo(assetSymbol, usuario);
+        return resultado.excluidas() == 0 && resultado.proventosExcluidos() == 0
                 ? ResponseEntity.notFound().build()
-                : ResponseEntity.ok(new DadosExclusaoPorAtivoDTO(simbolo, excluidas));
+                : ResponseEntity.ok(resultado);
     }
 
     // 🚀 ROTA PARA EDITAR A TRANSAÇÃO (404 se não existir ou for de outro usuário)

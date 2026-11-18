@@ -1,10 +1,12 @@
 package com.palminvest.api.service;
 
 import com.palminvest.api.dto.DadosCadastroTransacaoDTO;
+import com.palminvest.api.dto.DadosExclusaoPorAtivoDTO;
 import com.palminvest.api.infra.RegraDeNegocioException;
 import com.palminvest.api.model.Transaction;
 import com.palminvest.api.model.TransactionType;
 import com.palminvest.api.model.Usuario;
+import com.palminvest.api.repository.ProventoRepository;
 import com.palminvest.api.repository.TransactionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,9 @@ public class TransactionService {
 
     @Autowired
     private TransactionRepository repository;
+
+    @Autowired
+    private ProventoRepository proventos;
 
     @Transactional(readOnly = true)
     public List<Transaction> listar(Usuario usuario) {
@@ -71,12 +76,14 @@ public class TransactionService {
         return true;
     }
 
-    // Remove o ativo inteiro (compras e vendas) numa única transação de banco: ou apaga tudo, ou nada.
-    // Não precisa validar saldo, porque a linha do tempo do símbolo fica vazia. Devolve quantas apagou.
+    // Remove o ativo inteiro (compras, vendas e proventos) numa única transação de banco: ou apaga tudo, ou nada.
+    // Não precisa validar saldo, porque a linha do tempo do símbolo fica vazia. Devolve quanto apagou de cada.
     @Transactional
-    public long excluirPorSimbolo(String assetSymbol, Usuario usuario) {
+    public DadosExclusaoPorAtivoDTO excluirPorSimbolo(String assetSymbol, Usuario usuario) {
         var simbolo = assetSymbol.trim().toUpperCase(Locale.ROOT);
-        return repository.deleteByUsuarioAndAssetSymbol(usuario, simbolo);
+        long proventosExcluidos = proventos.deleteByUsuarioAndAssetSymbol(usuario, simbolo);
+        long excluidas = repository.deleteByUsuarioAndAssetSymbol(usuario, simbolo);
+        return new DadosExclusaoPorAtivoDTO(simbolo, excluidas, proventosExcluidos);
     }
 
     /**
