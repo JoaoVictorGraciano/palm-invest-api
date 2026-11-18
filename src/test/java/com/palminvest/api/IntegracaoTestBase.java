@@ -1,6 +1,7 @@
 package com.palminvest.api;
 
 import com.palminvest.api.infra.cotacao.CachesDeMercado;
+import com.palminvest.api.repository.ProventoRepository;
 import com.palminvest.api.repository.TransactionRepository;
 import com.palminvest.api.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,6 +63,9 @@ public abstract class IntegracaoTestBase {
     protected TransactionRepository transactionRepository;
 
     @Autowired
+    protected ProventoRepository proventoRepository;
+
+    @Autowired
     private DataSource dataSource;
 
     // @DynamicPropertySource tem a maior precedência: nem variável de ambiente (SPRING_DATASOURCE_URL)
@@ -90,7 +94,9 @@ public abstract class IntegracaoTestBase {
         assertTrue(urlConectada != null && urlConectada.startsWith("jdbc:h2:mem:"),
                 "Testes recusaram limpar o banco: a conexão não é H2 em memória (" + urlConectada + ")");
 
-        transactionRepository.deleteAll(); // transações primeiro, por causa da FK para usuarios
+        // Filhos primeiro, por causa das FKs para usuarios
+        proventoRepository.deleteAll();
+        transactionRepository.deleteAll();
         usuarioRepository.deleteAll();
 
         // Cotações e buscas em cache de um teste não podem vazar para o próximo
