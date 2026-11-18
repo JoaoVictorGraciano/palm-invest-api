@@ -7,7 +7,7 @@ API REST da carteira de investimentos **Palm Invest**. Guarda usuários, suas tr
 custo médio e histórico a partir delas.
 
 Também busca ativos e cotações na Brapi e na CoinGecko, com cache em memória, para o front não chamar esses provedores
-direto do navegador.
+direto do navegador, e calcula o lucro realizado das vendas com uma **estimativa** do imposto de renda mensal.
 
 Stack: Java 21, Spring Boot 4, Spring Security + JWT (jjwt), Spring Data JPA, Flyway, PostgreSQL, RestClient e
 Caffeine. Testes com JUnit 5, MockMvc, H2 em memória e um servidor HTTP local no lugar dos provedores.
@@ -141,6 +141,86 @@ Corpo do `POST`/`PUT` (sem `id`):
 instante) como ele ficaria após a operação e recusa com `422` qualquer criação, edição ou exclusão que deixe a
 quantidade em carteira negativa em algum ponto. Ex.: vender sem ter comprado, vender antes da data da compra, reduzir
 ou excluir uma compra que sustenta uma venda posterior.
+
+**Lucro realizado:** a resposta de cada transação traz `lucroRealizado`, preenchido só nas vendas (`null` nas
+compras): `(quantidade × preço − taxa da venda) − quantidade × custo médio`. O custo médio inclui as taxas das compras
+(`Σ(quantidade × preço + taxa) / Σ quantidade`), não muda numa venda e recomeça quando a posição zera. É por ativo,
+somando todas as corretoras.
+
+### Resultados e imposto de renda (`/api/resultados`)
+
+> **Aviso:** os valores são **estimativas** feitas a partir das transações registradas, com regras simplificadas.
+> Não substituem a apuração oficial nem a orientação de um contador. Confira sempre antes de emitir um DARF.
+
+| Método | Rota | Resposta |
+|---|---|---|
+| `GET` | `/api/resultados?ano=2025` | resultado mês a mês e por categoria, total do ano, prejuízo acumulado e alertas |
+| `GET` | `/api/resultados/limite-isencao?mes=2025-03` | quanto já foi vendido no mês em ações e cripto e quanto ainda cabe na isenção |
+
+Tudo é calculado das transações (não há tabela própria) e todo o histórico entra na conta, porque o prejuízo de anos
+anteriores abate lucro do ano pedido. As regras ficam em `RegrasDeImpostoDeRenda`, com a base legal em comentário:
+
+| Categoria | Alíquota | Isenção | Compensa prejuízo com | DARF |
+|---|---|---|---|---|
+| `STOCK` | 15% | total de **vendas** de ações no mês até R$ 20.000 | STOCK, ETF, BDR | 6015 |
+| `ETF` | 15% | não tem | STOCK, ETF, BDR | 6015 |
+| `BDR` | 15% | não tem | STOCK, ETF, BDR | 6015 |
+| `FII` | 20% | não tem | só FII | 6015 |
+| `CRYPTO` | 15% | total de **vendas** de todas as criptos no mês até R$ 35.000 | não compensa nesta versão | 4600 |
+
+- **Total de vendas** é quantidade × preço, sem descontar taxas. Passou do limite, o lucro do mês inteiro da categoria é
+  tributável; o próprio valor do limite ainda é isento.
+- **Compensação:** o prejuízo de um mês abate o lucro tributável dos **meses seguintes** do mesmo grupo, inclusive
+  em outros anos. Não há compensação entre categorias dentro do próprio mês. Prejuízo de mês isento de ações entra no
+  saldo; lucro de mês isento não consome o saldo.
+- **Vencimento do DARF:** último dia útil do mês seguinte, considerando fins de semana, feriados nacionais, Carnaval,
+  Sexta-feira Santa, Corpus Christi e 31/12 (não considera feriados estaduais ou municipais).
+- **Fora do cálculo:** day trade (só gera alerta), faixas de cripto acima de R$ 5 milhões de ganho, IR retido na fonte
+  ("dedo-duro") e o acúmulo de DARF abaixo de R$ 10,00 (só gera alerta).
+
+Resposta de `GET /api/resultados?ano=2025` (resumida):
+
+```json
+{
+  "ano": 2025,
+  "meses": [
+    {
+      "mes": "2025-04",
+      "categorias": [
+        { "categoria": "STOCK", "totalVendas": 20001.00, "lucroBruto": 10001.00, "prejuizoCompensado": 0.00,
+          "baseCalculo": 10001.00, "isento": false, "aliquota": 0.15, "impostoEstimado": 1500.15,
+          "codigoDarf": "6015", "vencimentoDarf": "2025-05-30" }
+      ],
+      "darfs": [{ "codigoDarf": "6015", "impostoEstimado": 1500.15, "vencimento": "2025-05-30" }],
+      "impostoEstimado": 1500.15
+    }
+  ],
+  "totalAno": { "totalVendas": 20001.00, "lucroBruto": 10001.00, "prejuizoCompensado": 0.00, "baseCalculo": 10001.00, "impostoEstimado": 1500.15 },
+  "prejuizoAcumulado": { "inicioDoAno": { "acoesEtfBdr": 0.00, "fii": 0.00 }, "fimDoAno": { "acoesEtfBdr": 0.00, "fii": 0.00 } },
+  "alertas": [
+    { "tipo": "POSSIVEL_DAY_TRADE", "mes": "2025-03", "assetSymbol": "PETR4", "data": "2025-03-10", "mensagem": "..." },
+    { "tipo": "DARF_ABAIXO_DO_MINIMO", "mes": "2025-08", "assetSymbol": null, "data": null, "mensagem": "..." }
+  ]
+}
+```
+
+- `meses` traz sempre os 12 meses; cada mês só lista as categorias com vendas, e `darfs` só os códigos com imposto.
+- `prejuizoAcumulado` é o saldo ainda a compensar por grupo antes do ano começar e ao fim do ano.
+- Alertas: `POSSIVEL_DAY_TRADE` quando há compra e venda do mesmo ativo no mesmo dia (day trade tem alíquota de 20%
+  e DARF próprio e não é calculado); `DARF_ABAIXO_DO_MINIMO` quando o DARF de um código no mês fica abaixo de R$ 10,00.
+
+Resposta de `GET /api/resultados/limite-isencao?mes=2025-03` (`mes` no formato `AAAA-MM`; fora dele, `400`):
+
+```json
+{
+  "mes": "2025-03",
+  "acoes":  { "limite": 20000.00, "vendido": 15000.00, "disponivel": 5000.00,  "dentroDoLimite": true },
+  "cripto": { "limite": 35000.00, "vendido": 5000.00,  "disponivel": 30000.00, "dentroDoLimite": true }
+}
+```
+
+`acoes` conta só vendas de `STOCK` (ETF, BDR e FII não entram); `cripto` soma todas as moedas. `disponivel` nunca fica
+negativo.
 
 ### Proventos (`/api/proventos`)
 
