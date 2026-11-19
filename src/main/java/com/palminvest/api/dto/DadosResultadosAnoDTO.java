@@ -24,7 +24,8 @@ public record DadosResultadosAnoDTO(
 
     /**
      * @param lucroBruto         lucros − prejuízos das vendas do mês (negativo = prejuízo)
-     * @param prejuizoCompensado prejuízo de meses anteriores do mesmo grupo usado para abater este lucro
+     * @param prejuizoCompensado prejuízo do mesmo grupo (de outra categoria no mesmo mês ou de meses anteriores) usado
+     *                           para abater este lucro
      * @param baseCalculo        lucro tributável depois da compensação (zero se isento ou com prejuízo)
      * @param isento             vendas do mês dentro do limite de isenção da categoria (só STOCK e CRYPTO têm limite)
      */

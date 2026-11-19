@@ -19,14 +19,17 @@ import java.util.TreeMap;
  * Para cada mês, em ordem, e para cada categoria (STOCK, ETF, BDR, FII, CRYPTO):
  * 1. soma o total vendido (quantidade × preço) e o lucro bruto (lucros − prejuízos das vendas do mês);
  * 2. se a categoria tem isenção e o total vendido não passou do limite, o mês é isento (lucro não tributado);
- * 3. lucro tributável abate primeiro o prejuízo acumulado do grupo, em ordem STOCK, ETF, BDR dentro do grupo;
- * 4. o que sobra é a base de cálculo, tributada pela alíquota da categoria.
+ * 3. os prejuízos do mês entram no saldo do grupo ANTES dos lucros, para compensar já no próprio mês;
+ * 4. lucro tributável abate esse saldo, em ordem STOCK, ETF, BDR dentro do grupo;
+ * 5. o que sobra é a base de cálculo, tributada pela alíquota da categoria.
  *
  * Compensação de prejuízo (escolhas desta versão):
- * - Grupos: STOCK, ETF e BDR juntos; FII sozinho. O prejuízo de um mês só abate lucro tributável dos MESES SEGUINTES
- *   do mesmo grupo: não há compensação entre categorias dentro do próprio mês (ex.: prejuízo em BDR não abate lucro em
- *   ações do mesmo mês), embora a legislação permita. Isso pode deixar a estimativa acima do devido nesses meses.
- * - Prejuízo de mês isento de ações entra no saldo a compensar; lucro de mês isento não consome esse saldo.
+ * - Grupos: STOCK, ETF e BDR juntos; FII sozinho. No mês, os resultados tributáveis de ETF e BDR somam com o de ações:
+ *   prejuízo de ETF abate lucro de ações ou de BDR do mesmo mês, e vice-versa. O prejuízo que sobrar no mês vai para o
+ *   saldo do grupo e abate lucro tributável dos meses seguintes. Como as três categorias têm a mesma alíquota, a ordem
+ *   em que o saldo é usado dentro do mês não muda o imposto total, só em qual categoria aparece o abatimento.
+ * - Ações isentas no mês (vendas até R$ 20 mil): o lucro delas não entra na soma e não absorve prejuízo de ETF ou BDR.
+ *   Já o prejuízo de ações em mês isento entra no saldo (e abate lucro de ETF ou BDR do próprio mês).
  * - Cripto não compensa prejuízo: é ganho de capital, apurado venda a venda, e esta versão não acumula perdas de cripto.
  * - O saldo de prejuízo atravessa os anos (prejuízo de 2024 abate lucro de 2025).
  */
@@ -61,11 +64,19 @@ final class ApuracaoDeImposto {
 
         for (var entrada : porMes.entrySet()) {
             var mes = entrada.getKey();
-            var prejuizosDoMes = saldoZerado(); // só passam a valer no mês seguinte
+            var vendasDoMes = entrada.getValue();
             var vencimento = RegrasDeImpostoDeRenda.vencimentoDarf(mes);
 
+            // Prejuízos do mês primeiro: compensam lucros do próprio mês no grupo, e o que sobrar segue para os seguintes
+            vendasDoMes.forEach((categoria, somas) -> {
+                var grupo = RegrasDeImpostoDeRenda.de(categoria).grupo();
+                if (somas[1].signum() < 0 && grupo != GrupoDeCompensacao.SEM_COMPENSACAO) {
+                    saldo.merge(grupo, somas[1].negate(), BigDecimal::add);
+                }
+            });
+
             for (var categoria : ORDEM_CATEGORIAS) {
-                var somas = entrada.getValue().get(categoria);
+                var somas = vendasDoMes.get(categoria);
                 if (somas == null) {
                     continue;
                 }
@@ -76,11 +87,8 @@ final class ApuracaoDeImposto {
                 var compensado = ZERO;
                 var base = ZERO;
 
-                if (lucroBruto.signum() < 0) {
-                    if (regra.grupo() != GrupoDeCompensacao.SEM_COMPENSACAO) {
-                        prejuizosDoMes.merge(regra.grupo(), lucroBruto.negate(), BigDecimal::add);
-                    }
-                } else if (!isento) {
+                // Lucro isento não entra na soma do grupo e não consome o saldo
+                if (lucroBruto.signum() > 0 && !isento) {
                     if (regra.grupo() != GrupoDeCompensacao.SEM_COMPENSACAO) {
                         compensado = saldo.get(regra.grupo()).min(lucroBruto);
                         saldo.merge(regra.grupo(), compensado.negate(), BigDecimal::add);
@@ -93,7 +101,6 @@ final class ApuracaoDeImposto {
                         regra.aliquota(), imposto, regra.codigoDarf(), vencimento));
             }
 
-            prejuizosDoMes.forEach((grupo, valor) -> saldo.merge(grupo, valor, BigDecimal::add));
             saldoAoFimDoMes.put(mes, new EnumMap<>(saldo));
         }
         return new Apuracao(resultados, saldoAoFimDoMes);
@@ -108,7 +115,8 @@ final class ApuracaoDeImposto {
 
     /**
      * @param lucroBruto         lucros − prejuízos das vendas da categoria no mês (negativo = prejuízo do mês)
-     * @param prejuizoCompensado quanto do saldo de prejuízo de meses anteriores abateu este lucro
+     * @param prejuizoCompensado quanto de prejuízo do grupo (de outra categoria no mesmo mês ou de meses anteriores)
+     *                           abateu este lucro
      * @param baseCalculo        lucro tributável depois da compensação (zero se isento ou com prejuízo)
      * @param imposto            estimativa: base × alíquota
      */

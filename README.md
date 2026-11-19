@@ -170,9 +170,11 @@ anteriores abate lucro do ano pedido. As regras ficam em `RegrasDeImpostoDeRenda
 
 - **Total de vendas** é quantidade × preço, sem descontar taxas. Passou do limite, o lucro do mês inteiro da categoria é
   tributável; o próprio valor do limite ainda é isento.
-- **Compensação:** o prejuízo de um mês abate o lucro tributável dos **meses seguintes** do mesmo grupo, inclusive
-  em outros anos. Não há compensação entre categorias dentro do próprio mês. Prejuízo de mês isento de ações entra no
-  saldo; lucro de mês isento não consome o saldo.
+- **Compensação:** no mês, os resultados tributáveis de ETF e BDR somam com o de ações (prejuízo de ETF abate lucro
+  de ações ou BDR do mesmo mês, e vice-versa). Se as ações do mês ficaram isentas, o lucro delas não entra nessa soma e
+  não absorve prejuízo de ETF ou BDR; o prejuízo de ações em mês isento entra. O prejuízo que sobrar no mês vai para o
+  acumulado do grupo e abate lucro tributável dos meses seguintes, inclusive em outros anos. FII compensa só com FII;
+  cripto não compensa. `prejuizoCompensado` mostra quanto de prejuízo (do mês ou acumulado) abateu o lucro da categoria.
 - **Vencimento do DARF:** último dia útil do mês seguinte, considerando fins de semana, feriados nacionais, Carnaval,
   Sexta-feira Santa, Corpus Christi e 31/12 (não considera feriados estaduais ou municipais).
 - **Fora do cálculo:** day trade (só gera alerta), faixas de cripto acima de R$ 5 milhões de ganho, IR retido na fonte

@@ -166,9 +166,7 @@ class ResultadoControllerTest extends IntegracaoTestBase {
         operar(tokenA, "SELL", "VALE3", "STOCK", "2000", "15", "0", "2025-03-20T10:00:00");
         operar(tokenA, "BUY", "XPLG11", "FII", "10", "100", "0", "2025-03-03T10:00:00");
         operar(tokenA, "SELL", "XPLG11", "FII", "10", "130", "0", "2025-03-20T10:00:00");
-        // Abril: ETF -500 não abate o lucro de ações do próprio mês (só dos seguintes): ações +1.000 -> 150,00
-        operar(tokenA, "BUY", "ITUB4", "STOCK", "1000", "25", "0", "2025-04-01T10:00:00");
-        operar(tokenA, "SELL", "ITUB4", "STOCK", "1000", "26", "0", "2025-04-15T10:00:00");
+        // Abril: ETF -500 sem lucro no grupo para abater: fica no saldo
         operar(tokenA, "BUY", "BOVA11", "ETF", "50", "100", "0", "2025-04-01T10:00:00");
         operar(tokenA, "SELL", "BOVA11", "ETF", "50", "90", "0", "2025-04-15T10:00:00");
         // Maio/junho: prejuízo de cripto não compensa: SOL -1.000 em maio, BTC +30.000 em junho -> 4.500,00
@@ -197,9 +195,9 @@ class ResultadoControllerTest extends IntegracaoTestBase {
         assertDecimal("200.00", fiiMar.get("baseCalculo"));
         assertDecimal("40.00", fiiMar.get("impostoEstimado"));
 
-        var acoesAbr = categoria(resultado, 4, "STOCK");
-        assertDecimal("0.00", acoesAbr.get("prejuizoCompensado"));
-        assertDecimal("150.00", acoesAbr.get("impostoEstimado"));
+        var etfAbr = categoria(resultado, 4, "ETF");
+        assertDecimal("-500.00", etfAbr.get("lucroBruto"));
+        assertDecimal("0.00", etfAbr.get("impostoEstimado"));
 
         var criptoJun = categoria(resultado, 6, "CRYPTO");
         assertDecimal("0.00", criptoJun.get("prejuizoCompensado"));
@@ -209,12 +207,113 @@ class ResultadoControllerTest extends IntegracaoTestBase {
         assertDecimal("0.00", resultado.at("/prejuizoAcumulado/inicioDoAno/acoesEtfBdr"));
         assertDecimal("500.00", resultado.at("/prejuizoAcumulado/fimDoAno/acoesEtfBdr"));
         assertDecimal("0.00", resultado.at("/prejuizoAcumulado/fimDoAno/fii"));
-        assertDecimal("5140.00", resultado.at("/totalAno/impostoEstimado"));
+        assertDecimal("4990.00", resultado.at("/totalAno/impostoEstimado")); // 450 + 40 + 4.500
 
         // O saldo atravessa o ano
         var ano2026 = resultados(tokenA, 2026);
         assertDecimal("500.00", ano2026.at("/prejuizoAcumulado/inicioDoAno/acoesEtfBdr"));
         assertDecimal("0.00", ano2026.at("/totalAno/impostoEstimado"));
+    }
+
+    @Test
+    void prejuizoDeEtfEBdrAbateLucroTributavelDeAcoesNoMesmoMes() throws Exception {
+        // Janeiro: ações +10.000 (vendas de 30 mil, tributável), ETF -3.000 e BDR -1.000 no mesmo mês
+        // -> ações abatem 4.000 -> base 6.000 -> 900,00; nada sobra para o saldo
+        operar(tokenA, "BUY", "PETR4", "STOCK", "2000", "10", "0", "2025-01-02T10:00:00");
+        operar(tokenA, "SELL", "PETR4", "STOCK", "2000", "15", "0", "2025-01-20T10:00:00");
+        operar(tokenA, "BUY", "BOVA11", "ETF", "100", "100", "0", "2025-01-02T10:00:00");
+        operar(tokenA, "SELL", "BOVA11", "ETF", "100", "70", "0", "2025-01-20T10:00:00");
+        operar(tokenA, "BUY", "AAPL34", "BDR", "100", "50", "0", "2025-01-02T10:00:00");
+        operar(tokenA, "SELL", "AAPL34", "BDR", "100", "40", "0", "2025-01-20T10:00:00");
+        // Fevereiro: ações +1.000 (vendas de 26 mil, tributável) e ETF -2.000
+        // -> ações abatem 1.000 -> base 0; sobram 1.000 para o saldo
+        operar(tokenA, "BUY", "ITUB4", "STOCK", "1000", "25", "0", "2025-02-03T10:00:00");
+        operar(tokenA, "SELL", "ITUB4", "STOCK", "1000", "26", "0", "2025-02-20T10:00:00");
+        operar(tokenA, "BUY", "IVVB11", "ETF", "100", "100", "0", "2025-02-03T10:00:00");
+        operar(tokenA, "SELL", "IVVB11", "ETF", "100", "80", "0", "2025-02-20T10:00:00");
+        // Março: BDR +1.500 abate o saldo de 1.000 -> base 500 -> 75,00
+        operar(tokenA, "BUY", "MSFT34", "BDR", "100", "50", "0", "2025-03-03T10:00:00");
+        operar(tokenA, "SELL", "MSFT34", "BDR", "100", "65", "0", "2025-03-20T10:00:00");
+
+        var resultado = resultados(tokenA, 2025);
+
+        var acoesJan = categoria(resultado, 1, "STOCK");
+        assertFalse(acoesJan.get("isento").asBoolean());
+        assertDecimal("10000.00", acoesJan.get("lucroBruto"));
+        assertDecimal("4000.00", acoesJan.get("prejuizoCompensado"));
+        assertDecimal("6000.00", acoesJan.get("baseCalculo"));
+        assertDecimal("900.00", acoesJan.get("impostoEstimado"));
+        var etfJan = categoria(resultado, 1, "ETF");
+        assertDecimal("-3000.00", etfJan.get("lucroBruto"));
+        assertDecimal("0.00", etfJan.get("prejuizoCompensado"));
+        assertDecimal("0.00", etfJan.get("impostoEstimado"));
+        assertDecimal("900.00", resultado.at("/meses/0/darfs/0/impostoEstimado"));
+
+        var acoesFev = categoria(resultado, 2, "STOCK");
+        assertDecimal("1000.00", acoesFev.get("prejuizoCompensado"));
+        assertDecimal("0.00", acoesFev.get("baseCalculo"));
+        assertDecimal("0.00", acoesFev.get("impostoEstimado"));
+        assertEquals(0, resultado.at("/meses/1/darfs").size());
+
+        var bdrMar = categoria(resultado, 3, "BDR");
+        assertDecimal("1000.00", bdrMar.get("prejuizoCompensado"));
+        assertDecimal("500.00", bdrMar.get("baseCalculo"));
+        assertDecimal("75.00", bdrMar.get("impostoEstimado"));
+
+        assertDecimal("975.00", resultado.at("/totalAno/impostoEstimado"));
+        assertDecimal("6000.00", resultado.at("/totalAno/prejuizoCompensado")); // 4.000 + 1.000 + 1.000
+        assertDecimal("0.00", resultado.at("/prejuizoAcumulado/fimDoAno/acoesEtfBdr"));
+
+        // Outro usuário não vê nada disso
+        var tokenB = novoUsuarioComToken("B", "b@exemplo.com");
+        var deB = resultados(tokenB, 2025);
+        assertDecimal("0.00", deB.at("/totalAno/impostoEstimado"));
+        assertEquals(0, deB.at("/meses/0/categorias").size());
+    }
+
+    @Test
+    void lucroDeAcoesIsentasNaoAbsorvePrejuizoDeEtfNoMesmoMes() throws Exception {
+        // Abril: ações +5.000 com vendas de 15 mil (isento) e ETF -1.000
+        // -> o lucro isento não entra na soma: ações sem imposto e sem abatimento; os 1.000 vão para o saldo
+        operar(tokenA, "BUY", "PETR4", "STOCK", "1000", "10", "0", "2025-04-01T10:00:00");
+        operar(tokenA, "SELL", "PETR4", "STOCK", "1000", "15", "0", "2025-04-15T10:00:00");
+        operar(tokenA, "BUY", "BOVA11", "ETF", "100", "100", "0", "2025-04-01T10:00:00");
+        operar(tokenA, "SELL", "BOVA11", "ETF", "100", "90", "0", "2025-04-15T10:00:00");
+        // Maio: BDR +2.000 abate o saldo de 1.000 -> base 1.000 -> 150,00
+        operar(tokenA, "BUY", "AAPL34", "BDR", "100", "50", "0", "2025-05-02T10:00:00");
+        operar(tokenA, "SELL", "AAPL34", "BDR", "100", "70", "0", "2025-05-20T10:00:00");
+        // Junho: prejuízo de ações em mês isento (-500, vendas de 4.500) entra na soma e abate ETF +800 do mesmo mês
+        // -> base 300 -> 45,00
+        operar(tokenA, "BUY", "VALE3", "STOCK", "100", "50", "0", "2025-06-02T10:00:00");
+        operar(tokenA, "SELL", "VALE3", "STOCK", "100", "45", "0", "2025-06-20T10:00:00");
+        operar(tokenA, "BUY", "IVVB11", "ETF", "10", "100", "0", "2025-06-02T10:00:00");
+        operar(tokenA, "SELL", "IVVB11", "ETF", "10", "180", "0", "2025-06-20T10:00:00");
+
+        var resultado = resultados(tokenA, 2025);
+
+        var acoesAbr = categoria(resultado, 4, "STOCK");
+        assertTrue(acoesAbr.get("isento").asBoolean());
+        assertDecimal("5000.00", acoesAbr.get("lucroBruto"));
+        assertDecimal("0.00", acoesAbr.get("prejuizoCompensado"));
+        assertDecimal("0.00", acoesAbr.get("baseCalculo"));
+        assertDecimal("0.00", acoesAbr.get("impostoEstimado"));
+        assertDecimal("-1000.00", categoria(resultado, 4, "ETF").get("lucroBruto"));
+        assertEquals(0, resultado.at("/meses/3/darfs").size());
+
+        var bdrMai = categoria(resultado, 5, "BDR");
+        assertDecimal("1000.00", bdrMai.get("prejuizoCompensado"));
+        assertDecimal("1000.00", bdrMai.get("baseCalculo"));
+        assertDecimal("150.00", bdrMai.get("impostoEstimado"));
+
+        assertTrue(categoria(resultado, 6, "STOCK").get("isento").asBoolean());
+        var etfJun = categoria(resultado, 6, "ETF");
+        assertDecimal("800.00", etfJun.get("lucroBruto"));
+        assertDecimal("500.00", etfJun.get("prejuizoCompensado"));
+        assertDecimal("300.00", etfJun.get("baseCalculo"));
+        assertDecimal("45.00", etfJun.get("impostoEstimado"));
+
+        assertDecimal("195.00", resultado.at("/totalAno/impostoEstimado"));
+        assertDecimal("0.00", resultado.at("/prejuizoAcumulado/fimDoAno/acoesEtfBdr"));
     }
 
     // --- Isolamento, alertas e formato ---
