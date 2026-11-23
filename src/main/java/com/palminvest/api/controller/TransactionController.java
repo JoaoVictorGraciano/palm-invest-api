@@ -24,10 +24,11 @@ public class TransactionController {
     @Autowired
     private TransactionService service;
 
-    // Rota GET: Retorna só as transações do usuário logado, ordenadas por data (mais recente primeiro)
+    // Rota GET: Retorna só as transações do usuário logado, ordenadas por data (mais recente primeiro),
+    // com o lucro realizado de cada venda
     @GetMapping
     public List<DadosDetalhamentoTransacaoDTO> listarTodas(@AuthenticationPrincipal Usuario usuario) {
-        return service.listar(usuario).stream().map(DadosDetalhamentoTransacaoDTO::new).toList();
+        return service.listar(usuario);
     }
 
     // Rota POST: Recebe uma transação nova do Front e salva no banco com o usuário logado como dono
@@ -35,7 +36,7 @@ public class TransactionController {
     @ResponseStatus(HttpStatus.CREATED)
     public DadosDetalhamentoTransacaoDTO criarTransacao(@RequestBody @Valid DadosCadastroTransacaoDTO dados,
                                                         @AuthenticationPrincipal Usuario usuario) {
-        return new DadosDetalhamentoTransacaoDTO(service.criar(dados, usuario));
+        return service.criar(dados, usuario);
     }
 
     // Rota DELETE: Apaga uma transação do usuário logado (404 se não existir ou for de outro usuário)
@@ -66,7 +67,7 @@ public class TransactionController {
                                                                            @RequestBody @Valid DadosCadastroTransacaoDTO dados,
                                                                            @AuthenticationPrincipal Usuario usuario) {
         return service.atualizar(id, dados, usuario)
-                .map(transaction -> ResponseEntity.ok(new DadosDetalhamentoTransacaoDTO(transaction)))
+                .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 }
